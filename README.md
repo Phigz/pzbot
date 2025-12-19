@@ -58,5 +58,5 @@ Utilities to streamline the development and testing loop.
 
 ## 📚 Documentation
 Detailed documentation is available in the `docs/` directory:
-*   [Unified Design & Architecture](docs/DESIGN.md)
+*   [Design & Architecture](docs/DESIGN.md)
 *   [Input/State Schemas](docs/schemas/)

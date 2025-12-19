@@ -27,8 +27,7 @@ The system consists of two main components operating in a loop:
 - **Control**: Manages the action queue and ensures smooth execution.
 
 ### 2.3. Data Flow Diagram
-```mermaid
-graph TD
+```
     Lua[PZ Mod (Lua)] -->|Writes state.json| Ingest[Observation Ingest]
     Ingest -->|Normalizes| Model[World Model]
     Model -->|Belief State| Plan[Planner/Controller]
