@@ -71,6 +71,7 @@ The **World Model** is the bot's internal representation of the game state. It a
 ### 4.1. Input Schema (`input.json`)
 The bot writes commands to `input.json`.
 
+**Example:**
 ```json
 {
   "sequence_number": 1,
@@ -96,6 +97,7 @@ The bot writes commands to `input.json`.
 ### 4.2. State Schema (`state.json`)
 The mod writes perception data to `state.json`.
 
+**Example:**
 ```json
 {
   "timestamp": 1234567890,
