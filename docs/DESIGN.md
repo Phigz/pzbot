@@ -141,20 +141,70 @@ The mod writes perception data to `state.json`.
 
 ## 5. Roadmap
 
-### Phase 1: Foundation (Completed)
+### Phase 1: Foundation (DONE)
 - [x] **Bi-directional Communication**: Lua ↔ Python bridge.
 - [x] **State Perception**: Reading health, stats, nearby zombies.
 - [x] **World Modeling**: Persistent grid memory and entity tracking.
 - [x] **Visualization**: Live HTML map.
 - [x] **Automation**: Auto-launch "New Game".
 
-### Phase 2: Survival Competence (Current)
-- [x] **Navigation**: A* Pathfinding (Backend implemented).
-- [ ] **Combat Logic**: Kiting and melee engagement rules.
-- [ ] **Looting Loop**: Identification of valuable items and inventory management.
-- [ ] **Exploration**: Frontier-based exploration logic.
+### Phase 2: World Modeling (WIP)
+- [x] **Spacial Grid Memory**: Sparse persistent map of discovered tiles.
+- [x] **Entity Tracking**: Dynamic tracking of entities (Zombies, Players, Items).
+- [x] **Navigation**: A* pathfinding on the internal grid
+- [ ] **Semantic World Labels**: Buildings, rooms, interiors vs exteriors, etc.
+- [ ] **Resource Awareness**: Known loot loctaions, seen container memory, etc.
+- [ ] **Threat Modeling**: Zombie density, chase states, line-of-sight danger, etc.
+- [ ] **Event Awareness**: Gunshots, explosions, etc.
 
-### Phase 3: Advanced Intelligence
-- [ ] **LLM Integration**: Connecting to LLMs for goal planning.
-- [ ] **Long-Term Memory**: "I saw a Sledgehammer at Warehouse A".
-- [ ] **Sound/Scent**: Reacting to gunshot events or trails.
+#### Implementation Notes
+This phase answers:
+> "What exists in the world, where is it, and how reliable is my knowledge?"
+
+### Phase 3: Reactive Control (TODO)
+- [ ] **Threat Response**: Depends on if threat is zombie or player.
+- [ ] **Critical Needs**: Bleeding, starving, etc.
+- [ ] **Local Navigation**: Avoid blocked or dangerous tiles, re-pathing.
+
+#### Implementation Notes
+- Consumes the world model
+- Emits short-lived action sequences
+- Can override higher-level plans when necessary
+
+This phase answers:
+> "What must I do right now to avoid dying?"
+
+### Phase 4: Tactical Planning (TODO)
+- [ ] **Goal Decomposition**: "Loot this house", "Clear nearby zombies", etc.
+- [ ] **Multi-step Planning**: Navigate -> interact -> wait -> observe -> react.
+- [ ] **Inventory & Resource Constraints**: Capacity-aware looting, tool requirements, etc.
+- [ ] **Risk Evaluation**: Zombie density vs reward, escape path availability, etc.
+
+#### Implementation Notes
+- Likely hybrid:
+ - Deterministic planners (GOAP-style)
+ - Optional lightweight model assistance
+- Outputs plans that are:
+ - Interruptible
+ - Verifiable
+ - Recoverable on failure
+
+This phase answers: 
+> "What must I do right now to avoid dying?"
+
+### Phase 5: Strategic and Long-Term Planning (TODO)
+- [ ] **Long-Term Memory**: 
+
+#### Implementation Notes
+- LLM-backed orchestration layer
+- Consumes:
+ - Summarized world model
+ - Tactical outcomes
+ - Historical memory
+- Produces:
+ - High-level intents
+ - Constraints and priorities
+
+This phase answers:
+> "Who am I, and what kind of survivor am I trying to be?"
+
