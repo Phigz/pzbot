@@ -211,7 +211,12 @@
                                         "type": "string"
                                     },
                                     "layer": {
-                                        "type": "string"
+                                        "type": "string",
+                                        "description": "Semantic type: Street, Tree, Vegetation, Wall, FenceLow, FenceHigh, Floor"
+                                    },
+                                    "w": {
+                                        "type": "boolean",
+                                        "description": "Walkable status. True = free to move, False = blocked."
                                     }
                                 }
                             }

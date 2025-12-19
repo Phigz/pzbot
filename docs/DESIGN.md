@@ -58,10 +58,20 @@ The **World Model** is the bot's internal representation of the game state. It a
 - **Responsibility**: Persistent map of the physical world.
 - **Data Structure**: `SpatialGrid` class using a sparse dictionary of `GridTile` objects.
 - **Features**:
-    - **Walkability**: Walls, fences, and open space derived from nav-grid data.
-    - **Discovery**: Tracks visited tiles.
+    - **Walkability**: Derived from `w` flag in tile data.
+    - **Discovery**: Tracks visited tiles and prevents "gaps" by filling in missing data with floor checks.
     - **Bounds**: Dynamically updates the bounding box of known territory.
-- **Visualization**: Inspectable via `tools/visualize_grid.py`, which renders the grid to an HTML Canvas with semantic color-coding (e.g., distinguishing Rooms vs Outdoors).
+    - **Semantic Layers**:
+        - **Rooms**: Extracted from Lua `sq:getRoom()` (e.g., "Kitchen", "Garage").
+        - **Layers**: Extracted from Sprite/Object classification:
+            - `Tree`: Trees (canopy or trunk).
+            - `Street`: Pavement/Roads.
+            - `Wall`: Impassable building walls.
+            - `FenceHigh`: Tall/Climbable fences.
+            - `FenceLow`: Waist-high fences.
+            - `Vegetation`: Grass/Plants.
+            - `Floor`: Interior floors.
+- **Visualization**: Inspectable via `tools/visualize_grid.py`, which renders the grid to an HTML Canvas with semantic color-coding (Rooms > Trees > Walls > Floors).
 
 ### 3.4. Navigation (Implemented)
 - **Algorithm**: A* Pathfinding (`AStarPathfinder` in `nav.py`).
