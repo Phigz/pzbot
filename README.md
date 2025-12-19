@@ -31,27 +31,7 @@ Utilities to streamline the development and testing loop.
 
 ## � Usage
 
-### 1. Launch the Game
-Start Project Zomboid in debug mode with automated entry:
-```powershell
-# Start a fresh new game (auto-skips menus)
-.\dev_tools\launch_pz.bat --new
-
-# Or continue the last save
-.\dev_tools\launch_pz.bat
-```
-
-### 2. Start the Bot Runtime
-Launch the Python brain to begin perception and control. This must run alongside the game.
-```powershell
-python -m pzbot.main
-```
-
-### 3. Visualizer (Optional)
-Open a real-time map view of what the bot "sees" and remembers.
-```powershell
-python pzbot/tools/visualize_grid.py
-```
+**Currently a heavy WIP, usage and setup instructions are not yet available.**
 
 ---
 
