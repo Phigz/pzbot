@@ -4,6 +4,7 @@
 # Whitelist specific top-level folders/files
 !/dev_tools
 !/pzbot
+!/pzbot/tools/*.py
 !/mods
 !/docs
 !/README.md
