@@ -28,11 +28,11 @@ The system consists of two main components operating in a loop:
 
 ### 2.3. Data Flow Diagram
 ```
-    Lua[PZ Mod (Lua)] -->|Writes state.json| Ingest[Observation Ingest]
-    Ingest -->|Normalizes| Model[World Model]
-    Model -->|Belief State| Plan[Planner/Controller]
-    Plan -->|Generates Actions| Queue[Action Queue]
-    Queue -->|Writes input.json| Lua
+- Lua[PZ Mod (Lua)] -->|Writes state.json| Ingest[Observation Ingest]
+- Ingest -->|Normalizes| Model[World Model]
+- Model -->|Belief State| Plan[Planner/Controller]
+- Plan -->|Generates Actions| Queue[Action Queue]
+- Queue -->|Writes input.json| Lua
 ```
 
 ---
@@ -42,7 +42,7 @@ The **World Model** is the bot's internal representation of the game state. It a
 
 ### 3.1. Vision Ingestion
 - **Source**: `state.json` (Lua Mod)
-- **Unified Radius**: All entities (Zombies, Items) are scanned at 50 tiles.
+- **Radius**: All entities (Zombies, Items) are scanned at 50 tiles.
 
 ### 3.2. Entity Manager
 - **Responsibility**: Tracks dynamic actors (Zombies, Players, Items).
