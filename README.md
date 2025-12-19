@@ -28,46 +28,13 @@ Utilities to streamline the development and testing loop.
 
 ---
 
-## 🚀 Getting Started
+## 🚧 Work in Progress
 
-### Prerequisites
-*   Project Zomboid (Steam Version)
-*   Python 3.10+
-*   Git
+**This project is currently under active development.**
 
-### Installation
-1.  **Clone the Repository**:
-    ```bash
-    git clone https://github.com/Phigz/pzbot.git
-    cd pzbot
-    ```
+Detailed installation and setup instructions have been temporarily removed as the codebase is undergoing significant refactoring. Please check back later for updated guides.
 
-2.  **Install Python Dependencies**:
-    ```bash
-    pip install -r requirements.txt
-    ```
-    *(Note: You may need to create a virtual environment first)*
-
-3.  **Install the Mod**:
-    *   Symlink or copy the `mods/AISurvivorBridge` folder into your Project Zomboid mods directory (usually `C:\Users\<User>\Zomboid\mods`).
-
-### Usage
-
-**1. Launch the Game (Automated)**
-Use the provided script to start the game. This handles all menu navigation for you.
-```powershell
-# Start a fresh new game with "Bot User"
-.\dev_tools\launch_pz.bat --new
-
-# Or, continue the last save
-.\dev_tools\launch_pz.bat
-```
-
-**2. Run the Bot**
-Once the game is running and the character has spawned:
-```bash
-python -m pzbot.main
-```
+If you are a contributor, please refer to the `docs/` folder or contact the maintainers for dev-setup instructions.
 
 ---
 
