@@ -1,5 +1,4 @@
-# PZBot: AI Survivor Bridge
-
+# PZBot: An Bot for Project Zomboid
 **PZBot** is an experimental framework connecting Project Zomboid to external AI agents. It serves as a bidirectional bridge, allowing Python-based AI models to perceive the game state and control a character in real-time.
 
 The project is designed to enable the development of autonomous agents capable of navigating, surviving, and thriving in the zombie apocalypse using modern AI techniques.
