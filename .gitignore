@@ -43,3 +43,8 @@ coverage.xml
 /screenshots
 /console.txt
 /options.ini
+# Visualization & State Artifacts
+grid_snapshot.json
+map_view.html
+input.json
+state.json
