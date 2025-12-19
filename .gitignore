@@ -10,6 +10,9 @@
 !/README.md
 !/.gitignore
 
+# Ignore certain pzbot files
+/pzbot/logs/*
+
 # Mods: Ignore everything except AISurvivorBridge
 /mods/*
 !/mods/AISurvivorBridge
