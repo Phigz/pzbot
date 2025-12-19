@@ -1,26 +1,97 @@
-# AI Survivor Bridge
+# PZBot: AI Survivor Bridge
 
-A Project Zomboid mod acting as a bridge between the game engine (Lua) and an external AI agent (Python).
+**PZBot** is an experimental framework connecting Project Zomboid to external AI agents. It serves as a bidirectional bridge, allowing Python-based AI models to perceive the game state and control a character in real-time.
 
-## Architecture
-See `docs/` for detailed architecture diagrams:
-- [Bot Layering Architecture](docs/botLayeringArchitecture.txt)
-- [Data Flow](docs/dataFlowArchitecture.txt)
+The project is designed to enable the development of autonomous agents capable of navigating, surviving, and thriving in the zombie apocalypse using modern AI techniques.
 
-## Developer Tools
+## 🏗️ Architecture Overview
 
-### Automated Game Launch (`launch_pz.bat`)
-Located in `dev_tools/`, this script automates the tedious process of launching the game and navigating the start screen.
+The system consists of three primary components:
 
-**Usage:**
-```batch
+### 1. The Mod (`AISurvivorBridge`)
+Located in `mods/AISurvivorBridge`, this Lua mod runs inside the game engine.
+*   **Perception**: Scans the immediate environment (zombies, player stats, items) and writes structured JSON state to disk.
+*   **Actuation**: Reads command files (`input.json`) and executes in-game actions (Walk, Run, Attack, Loot, etc.) using the internal game API.
+*   **Automation**: Handles game lifecycle management, including auto-launching new sandbox games for training loops.
+
+### 2. The Bot Runtime (`pzbot`)
+Located in `pzbot`, this is the external Python brain.
+*   **State Ingestion**: Monitors the game's output files for real-time state updates.
+*   **Decision Engine**: Processes state data to make high-level survival decisions.
+*   **Action Dispatch**: Converts high-level intents (e.g., "Flee from horde") into low-level atomic actions (e.g., `WalkTo(x,y)`) sent to the mod.
+
+### 3. Developer Tools (`dev_tools`)
+Utilities to streamline the development and testing loop.
+*   **`launch_pz.bat`**: A single command to kill stale processes, configure launch options, and start the game in debug mode.
+*   **`configure_launch.py`**: Manages launch configurations (New Game vs. Continue).
+*   **`click_start_check.py`**: Automates the "Click to Start" interaction to ensure zero-interaction boot-up.
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+*   Project Zomboid (Steam Version)
+*   Python 3.10+
+*   Git
+
+### Installation
+1.  **Clone the Repository**:
+    ```bash
+    git clone https://github.com/Phigz/pzbot.git
+    cd pzbot
+    ```
+
+2.  **Install Python Dependencies**:
+    ```bash
+    pip install -r requirements.txt
+    ```
+    *(Note: You may need to create a virtual environment first)*
+
+3.  **Install the Mod**:
+    *   Symlink or copy the `mods/AISurvivorBridge` folder into your Project Zomboid mods directory (usually `C:\Users\<User>\Zomboid\mods`).
+
+### Usage
+
+**1. Launch the Game (Automated)**
+Use the provided script to start the game. This handles all menu navigation for you.
+```powershell
+# Start a fresh new game with "Bot User"
+.\dev_tools\launch_pz.bat --new
+
+# Or, continue the last save
 .\dev_tools\launch_pz.bat
 ```
 
-**Features:**
-- **Auto-Kill**: Terminates existing `ProjectZomboid64.exe` processes.
-- **Auto-Click**: Launches `click_start_check.py` to monitor `console.txt`. Once the game is ready ("Removing undersized resolution mode" log detected), it automatically focuses the window and performs a mouse click to bypass the "Click to start" screen.
-- **Log Cleanup**: Automatically removes old `console.txt` logs to ensure clean reads.
+**2. Run the Bot**
+Once the game is running and the character has spawned:
+```bash
+python -m pzbot.main
+```
 
-### Mouse Debugging
-If you encounter input issues, use `dev_tools/debug_mouse_logger.py` to trace click coordinates and active window titles.
+---
+
+## 🗺️ Roadmap
+
+### Phase 1: Foundation (Current)
+- [x] **Bi-directional Communication**: Lua ↔ Python file-based bridge.
+- [x] **Basic Actions**: Movement, looking, sitting, inventory interaction.
+- [x] **State Perception**: Reading health, stats, and nearby zombie positions.
+- [x] **Automation**: Fully automated new-game launch sequence.
+
+### Phase 2: Survival Competence
+- [ ] **Navigation**: A* Pathfinding integration on the Python side.
+- [ ] **Combat Logic**: Basic kiting and melee engagement rules.
+- [ ] **Looting Loop**: Identification of valuable items and inventory management.
+
+### Phase 3: Advanced Intelligence
+- [ ] **LLM Integration**: Connecting to Large Language Models for high-level goal planning (e.g., "Secure a base").
+- [ ] **Visual Perception**: (Experimental) Using direct screen capture for vision-based inputs.
+- [ ] **Memory**: Implementation of long-term memory for map knowledge and safehouse tracking.
+
+---
+
+## 📚 Documentation
+Detailed documentation is available in the `docs/` directory:
+*   [Bot Layering Architecture](docs/botLayeringArchitecture.txt)
+*   [Data Flow Diagram](docs/dataFlowArchitecture.txt)
