@@ -16,22 +16,42 @@ Located in `mods/AISurvivorBridge`, this Lua mod runs inside the game engine.
 ### 2. The Bot Runtime (`pzbot`)
 Located in `pzbot`, this is the external Python brain.
 *   **State Ingestion**: Monitors the game's output files for real-time state updates.
+*   **World Modeling**: Builds a persistent 3D grid memory of walkability and tile data.
 *   **Decision Engine**: Processes state data to make high-level survival decisions.
-*   **Action Dispatch**: Converts high-level intents (e.g., "Flee from horde") into low-level atomic actions (e.g., `WalkTo(x,y)`) sent to the mod.
+*   **Action Dispatch**: Converts high-level intents (e.g., "Flee from horde") into low-level atomic actions.
 
 ### 3. Developer Tools (`dev_tools`)
 Utilities to streamline the development and testing loop.
 *   **`launch_pz.bat`**: A single command to kill stale processes, configure launch options, and start the game in debug mode.
 *   **`configure_launch.py`**: Manages launch configurations (New Game vs. Continue).
 *   **`click_start_check.py`**: Automates the "Click to Start" interaction to ensure zero-interaction boot-up.
+*   **`tools/visualize_grid.py`**: A live HTML map visualizer to inspect the bot's internal world model.
 
 ---
 
-## 🚧 Work in Progress
+## � Usage
 
-**This project is currently under active development.**
+### 1. Launch the Game
+Start Project Zomboid in debug mode with automated entry:
+```powershell
+# Start a fresh new game (auto-skips menus)
+.\dev_tools\launch_pz.bat --new
 
-Detailed installation and setup instructions have been temporarily removed as the codebase is undergoing significant refactoring. Please check back later for updated guides.
+# Or continue the last save
+.\dev_tools\launch_pz.bat
+```
+
+### 2. Start the Bot Runtime
+Launch the Python brain to begin perception and control. This must run alongside the game.
+```powershell
+python -m pzbot.main
+```
+
+### 3. Visualizer (Optional)
+Open a real-time map view of what the bot "sees" and remembers.
+```powershell
+python pzbot/tools/visualize_grid.py
+```
 
 ---
 
@@ -42,9 +62,10 @@ Detailed installation and setup instructions have been temporarily removed as th
 - [x] **Basic Actions**: Movement, looking, sitting, inventory interaction.
 - [x] **State Perception**: Reading health, stats, and nearby zombie positions.
 - [x] **Automation**: Fully automated new-game launch sequence.
+- [x] **World Modeling**: Persistent grid memory and map visualization.
 
 ### Phase 2: Survival Competence
-- [ ] **Navigation**: A* Pathfinding integration on the Python side.
+- [x] **Navigation**: A* Pathfinding integration (Python-side).
 - [ ] **Combat Logic**: Basic kiting and melee engagement rules.
 - [ ] **Looting Loop**: Identification of valuable items and inventory management.
 
@@ -57,5 +78,5 @@ Detailed installation and setup instructions have been temporarily removed as th
 
 ## 📚 Documentation
 Detailed documentation is available in the `docs/` directory:
-*   [Bot Layering Architecture](docs/botLayeringArchitecture.txt)
-*   [Data Flow Diagram](docs/dataFlowArchitecture.txt)
+*   [Unified Design & Architecture](docs/DESIGN.md)
+*   [Input/State Schemas](docs/schemas/)
