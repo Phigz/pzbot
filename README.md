@@ -60,3 +60,13 @@ Utilities to streamline the development and testing loop.
 Detailed documentation is available in the `docs/` directory:
 *   [Design & Architecture](docs/DESIGN.md)
 *   [Input/State Schemas](docs/schemas/)
+
+---
+
+## Disclaimer
+
+This project is an independent, experimental framework created by a third party.
+Project Zomboid is a trademark of The Indie Stone.
+
+This project is not affiliated with, endorsed by, or supported by The Indie Stone.
+All game assets, names, and trademarks remain the property of their respective owners.
