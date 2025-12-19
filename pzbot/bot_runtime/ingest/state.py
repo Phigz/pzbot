@@ -112,6 +112,7 @@ class Tile(LogExtraFieldsBase):
     x: int
     y: int
     z: int
+    room: Optional[str] = None
 
 class WorldObject(LogExtraFieldsBase):
     id: str

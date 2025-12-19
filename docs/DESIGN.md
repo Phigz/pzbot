@@ -61,7 +61,7 @@ The **World Model** is the bot's internal representation of the game state. It a
     - **Walkability**: Walls, fences, and open space derived from nav-grid data.
     - **Discovery**: Tracks visited tiles.
     - **Bounds**: Dynamically updates the bounding box of known territory.
-- **Visualization**: Inspectable via `tools/visualize_grid.py`, which renders the grid to an HTML Canvas.
+- **Visualization**: Inspectable via `tools/visualize_grid.py`, which renders the grid to an HTML Canvas with semantic color-coding (e.g., distinguishing Rooms vs Outdoors).
 
 ### 3.4. Navigation (Implemented)
 - **Algorithm**: A* Pathfinding (`AStarPathfinder` in `nav.py`).
@@ -125,7 +125,7 @@ The mod writes perception data to `state.json`.
     "inventory": {},
     "vision": {
       "scan_radius": 15,
-      "tiles": [ { "x": 10909, "y": 9995, "z": 0 } ],
+      "tiles": [ { "x": 10909, "y": 9995, "z": 0, "room": "Kitchen" } ],
       "objects": [ { "id": "1845", "type": "Zombie", "x": 10912, "y": 9998, "meta": { "state": "CHASING" } } ],
       "neighbors": { "n": { "status": "walkable" }, "s": { "status": "blocked" } }
     }
@@ -153,7 +153,7 @@ The mod writes perception data to `state.json`.
 - [x] **Spacial Grid Memory**: Sparse persistent map of discovered tiles.
 - [x] **Entity Tracking**: Dynamic tracking of entities (Zombies, Players, Items).
 - [x] **Navigation**: A* pathfinding on the internal grid
-- [ ] **Semantic World Labels**: Buildings, rooms, interiors vs exteriors, etc.
+- [x] **Semantic World Labels**: Buildings, rooms, interiors vs exteriors, etc.
 - [ ] **Resource Awareness**: Known loot loctaions, seen container memory, etc.
 - [ ] **Threat Modeling**: Zombie density, chase states, line-of-sight danger, etc.
 - [ ] **Event Awareness**: Gunshots, explosions, player chat, etc.

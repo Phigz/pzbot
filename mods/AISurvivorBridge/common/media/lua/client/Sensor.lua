@@ -187,7 +187,15 @@ function Sensor.scan(player, gridRadius)
                 -- Tile Info
                 local isWalkable = sq:isFree(false)
                 if isWalkable then
-                     table.insert(vision.tiles, { x = x, y = y, z = pz })
+                     local tileData = { x = x, y = y, z = pz }
+                     
+                     -- Room Logic
+                     local room = sq:getRoom()
+                     if room then
+                         tileData.room = room:getName()
+                     end
+                     
+                     table.insert(vision.tiles, tileData)
                 end
 
                 -- Static Object Info

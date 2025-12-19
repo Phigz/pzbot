@@ -14,6 +14,7 @@ class GridTile:
     z: int
     is_walkable: bool = True
     last_seen: float = 0.0
+    room: Optional[str] = None
 
 class SpatialGrid:
     """
@@ -41,15 +42,19 @@ class SpatialGrid:
         for vt in vision_tiles:
             key = (vt.x, vt.y, vt.z)
             if key in self._grid:
-                self._grid[key].last_seen = now
-                self._grid[key].is_walkable = True
+                tile = self._grid[key]
+                tile.last_seen = now
+                tile.is_walkable = True
+                if vt.room:
+                    tile.room = vt.room
             else:
                 self._grid[key] = GridTile(
                     x=vt.x,
                     y=vt.y,
                     z=vt.z,
                     is_walkable=True,
-                    last_seen=now
+                    last_seen=now,
+                    room=vt.room
                 )
                 self._update_bounds(vt.x, vt.y)
                 new_tiles_count += 1
@@ -92,6 +97,13 @@ class SpatialGrid:
             "total_tiles": len(self._grid),
             "bounds": f"[{self.min_x},{self.min_y}] to [{self.max_x},{self.max_y}]"
         }
+
+    def get_tiles_by_room(self, room_name: str) -> List[GridTile]:
+        """Returns all tiles belonging to a specific room."""
+        return [
+            t for t in self._grid.values() 
+            if t.room == room_name
+        ]
 
     def save_snapshot(self, path: str):
         """Serializes the current grid state to a JSON file."""

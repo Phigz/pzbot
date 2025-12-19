@@ -11,8 +11,6 @@ from bot_runtime.world.grid import SpatialGrid, GridTile
 
 import time
 
-# ... (imports)
-
 def generate_html_map(grid: SpatialGrid, output_path=None):
     if output_path is None:
         output_path = os.path.join(os.path.dirname(__file__), "map_view.html")
@@ -20,14 +18,14 @@ def generate_html_map(grid: SpatialGrid, output_path=None):
     """
     Generates a self-contained HTML file to visualize the grid.
     """
-    # ... (serialization logic same as before)
     tiles_data = []
     for coord, tile in grid._grid.items():
         tiles_data.append({
             "x": tile.x,
             "y": tile.y,
             "z": tile.z,
-            "val": 1 # Walkable
+            "val": 1,
+            "room": getattr(tile, "room", None)
         })
     
     # Calculate bounds dynamically from actual tiles to avoid outliers/ghost data
@@ -43,6 +41,32 @@ def generate_html_map(grid: SpatialGrid, output_path=None):
             "max_y": max(ys),
         }
 
+    # Collect unique rooms for legend
+    unique_rooms = set()
+    for t in tiles_data:
+        if t.get("room"):
+            unique_rooms.add(t["room"])
+    
+    # Generate Legend HTML dynamically
+    legend_html = '<div class="legend-item"><div class="box" style="background: #4CAF50"></div> Outdoors</div>'
+    
+    # We need to replicate the JS color hashing in Python to generate the correct legend colors
+    def string_to_color(s):
+        h = 0
+        for char in s:
+            h = ord(char) + ((h << 5) - h)
+        
+        color = '#'
+        for i in range(3):
+            val = (h >> (i * 8)) & 0xFF
+            val = min(255, val + 50) # Brighten
+            color += f"{val:02x}"
+        return color
+
+    for room in sorted(list(unique_rooms)):
+        color = string_to_color(room)
+        legend_html += f'<div class="legend-item"><div class="box" style="background: {color}"></div> {room}</div>'
+
     json_data = json.dumps(tiles_data)
     json_bounds = json.dumps(bounds)
 
@@ -57,11 +81,17 @@ def generate_html_map(grid: SpatialGrid, output_path=None):
         body {{ background: #1a1a1a; color: #eee; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; }}
         canvas {{ border: 1px solid #444; background: #000; image-rendering: pixelated; }}
         #info {{ margin: 10px; }}
+        .legend {{ display: flex; gap: 10px; margin: 5px; font-size: 0.8em; flex-wrap: wrap; justify-content: center; }}
+        .legend-item {{ display: flex; align-items: center; gap: 5px; background: #333; padding: 2px 6px; border-radius: 4px; }}
+        .box {{ width: 10px; height: 10px; }}
     </style>
 </head>
 <body>
     <h1>World Map</h1>
     <div id="info">Tiles: {len(tiles_data)} | Bounds: {bounds['min_x']},{bounds['min_y']} to {bounds['max_x']},{bounds['max_y']}</div>
+    <div class="legend">
+        {legend_html}
+    </div>
     <div id="status" style="font-size: 0.8em; color: #888;">Live Updating...</div>
     <canvas id="mapCanvas"></canvas>
     <script>
@@ -80,16 +110,36 @@ def generate_html_map(grid: SpatialGrid, output_path=None):
         canvas.width = width;
         canvas.height = height;
         
+        // Color hashing for consistent room colors - MUST MATCH PYTHON
+        function stringToColor(str) {{
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {{
+                hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            }}
+            let color = '#';
+            for (let i = 0; i < 3; i++) {{
+                let value = (hash >> (i * 8)) & 0xFF;
+                // Brighten semantics to distinguish from dark background
+                value = Math.min(255, value + 50); 
+                color += ('00' + value.toString(16)).substr(-2);
+            }}
+            return color;
+        }}
+        
         function draw() {{
             ctx.fillStyle = "#000";
             ctx.fillRect(0, 0, width, height);
-            
-            ctx.fillStyle = "#4CAF50"; // Green for walkable
             
             tiles.forEach(t => {{
                 // Transform world coords to canvas coords
                 const cx = (t.x - bounds.min_x) * TILE_SIZE + PADDING;
                 const cy = (t.y - bounds.min_y) * TILE_SIZE + PADDING;
+                
+                if (t.room) {{
+                    ctx.fillStyle = stringToColor(t.room); // Unique color per room name
+                }} else {{
+                    ctx.fillStyle = "#4CAF50"; // Green for outdoors
+                }}
                 
                 ctx.fillRect(cx, cy, TILE_SIZE - 1, TILE_SIZE - 1);
             }});

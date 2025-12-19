@@ -206,6 +206,9 @@
                                     },
                                     "z": {
                                         "type": "integer"
+                                    },
+                                    "room": {
+                                        "type": "string"
                                     }
                                 }
                             }
