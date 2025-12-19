@@ -1,9 +1,7 @@
-
 import logging
 import time
 from typing import Optional
 from bot_runtime.ingest.state import GameState, Player, Vision, ZombieState
-from .world_map import WorldMap
 from .entity_manager import EntityManager
 from bot_runtime.world.grid import SpatialGrid
 from bot_runtime.world.view import WorldView, EntityType
@@ -22,7 +20,6 @@ class WorldModel(WorldView):
         self.last_update_time = 0.0
         
         # Persistent Sub-systems
-        self.map = WorldMap()
         self.entities = EntityManager()
         self.grid = SpatialGrid()
 
@@ -36,28 +33,13 @@ class WorldModel(WorldView):
         if new_state.player and new_state.player.vision:
             vision = new_state.player.vision
             
-            # Ingest explicit tiles (walkable)
+            # Use the new consolidated Grid
             if vision.tiles:
-                self.map.import_vision(vision.tiles)
+                self.grid.update(vision.tiles)
                 
             # Update Entities
             self.entities.process_vision(vision.objects)
 
-            # Update Grid
-            self.grid.update(vision.tiles) # Changed from game_state.player.vision.tiles to vision.tiles for consistency
-
-            # Prune ghosts (This line was added based on the provided snippet, assuming _prune_entities is a new method or a placeholder for future logic)
-            # If _prune_entities is not defined, this will cause an error.
-            # For now, I'm commenting it out or assuming it's a placeholder for future implementation.
-            # If it's meant to be part of the entity manager, it should be called on self.entities.
-            # self._prune_entities().process_vision(vision.objects) # This line seems incomplete or refers to a non-existent method.
-            # Reverting to original entity processing and adding grid update.
-
-            # Original entity processing:
-            # if vision.objects:
-            #     self.entities.process_vision(vision.objects)
-            
-            # Map logic could be extended here to raycast and find walls if needed
             
     @property
     def player(self) -> Optional[Player]:

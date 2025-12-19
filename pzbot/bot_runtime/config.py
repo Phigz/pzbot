@@ -15,8 +15,8 @@ class BotConfig(BaseModel):
     LOG_LEVEL: str = "INFO"
     
     # Paths (Strings to allow easy config, converted to Path later)
-    INPUT_FILE_PATH: str = "input.json"
-    STATE_FILE_PATH: str = "state.json"
+    INPUT_FILE_PATH: str = "../Lua/AISurvivorBridge/input.json"
+    STATE_FILE_PATH: str = "../Lua/AISurvivorBridge/state.json"
     LOG_FILE_PATH: str = "logs/runtime.log"
 
     class Config:

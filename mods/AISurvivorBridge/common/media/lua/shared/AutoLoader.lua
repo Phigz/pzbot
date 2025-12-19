@@ -37,8 +37,11 @@ local function attemptLoad()
     if reader then
         local line = reader:readLine()
         while line do
-            if Logger then Logger.debug("AutoLoader", "Read Config Line: " .. tostring(line)) end
-            if string.find(line, "new_game") then launchMode = "new_game" end
+            if string.find(line, "new_game") then 
+                launchMode = "new_game"
+            elseif string.find(line, "done") then 
+                launchMode = "done" 
+            end
             line = reader:readLine()
         end
         reader:close()
@@ -46,6 +49,24 @@ local function attemptLoad()
         log("Could not open launch_config.json")
     end
     log("Launch Config Mode: " .. launchMode)
+    
+    -- CHECK FLAG: Config Consumed
+    if launchMode == "done" then
+        log("AutoLoad already performed (derived from launch_config). Stopping listener.")
+        loaded = true
+        Events.OnPreUIDraw.Remove(loadLoop)
+        return
+    end
+
+    -- CONSUME CONFIG (Mark as done)
+    -- We overwrite the config to ensure next time we see "done"
+    local writer = getFileWriter("AISurvivorBridge/launch_config.json", true, false)
+    if writer then
+        writer:write("{\"mode\": \"done\"}")
+        writer:close()
+    else
+        log("Error: Could not update launch_config.json directly.")
+    end
     
     -- Check if we can continue a save
     if launchMode ~= "new_game" and ms.continueLatestSave and ms.latestSaveWorld then
@@ -69,26 +90,21 @@ local function attemptLoad()
              MainScreen.instance.sandboxOptions:updateFromLua()
         end
 
-        -- Generate unique world name
         local worldName = "pz-bot-" .. tostring(ZombRand(1000000))
         
-        -- Setup World
         getWorld():setWorld(worldName)
         getWorld():setGameMode("Sandbox")
         getWorld():setMap("Muldraugh, KY;Riverside, KY;Rosewood, KY;West Point, KY;Echo Creek, KY")
         
-        -- Create World
         if createWorld then
              log("Calling GLOBAL createWorld(" .. worldName .. ")...")
              createWorld(worldName)
              
-             -- Initialize Player (mimic CharacterCreationMain:initPlayer)
              if MainScreen.instance.desc then
                  MainScreen.instance.desc:setForename("Bot")
                  MainScreen.instance.desc:setSurname("User")
              end
              
-             -- Trigger Game State Change
              if LoadingQueueState and forceChangeState then
                  log("Transitioning to LoadingQueueState...")
                  forceChangeState(LoadingQueueState.new())

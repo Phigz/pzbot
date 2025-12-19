@@ -33,15 +33,35 @@ def main():
         polling_interval=config.POLLING_INTERVAL
     )
 
+    # Snapshot settings
+    last_snapshot_time = 0.0
+    SNAPSHOT_INTERVAL = 10.0 # seconds
+    snapshot_path = config.BASE_DIR / "tools" / "grid_snapshot.json"
+
+    # Cleanup previous runtime data
+    for p in [snapshot_path, config.STATE_FILE_PATH]:
+        if p.exists():
+            try:
+                p.unlink()
+                logger.info(f"Cleaned up previous data at {p}")
+            except Exception as e:
+                logger.warning(f"Failed to clean up {p}: {e}")
+
     try:
         watcher.start()
         
         # Keep main thread alive
         while True:
             time.sleep(1)
+            
+            # Periodic Snapshot
+            if time.time() - last_snapshot_time > SNAPSHOT_INTERVAL:
+                world_model.grid.save_snapshot(str(snapshot_path))
+                last_snapshot_time = time.time()
 
     except KeyboardInterrupt:
         logger.info("Shutting down...")
+        world_model.grid.save_snapshot(str(snapshot_path))
         watcher.stop()
     except Exception as e:
         logger.error(f"Fatal error: {e}")
