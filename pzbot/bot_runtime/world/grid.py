@@ -15,6 +15,7 @@ class GridTile:
     is_walkable: bool = True
     last_seen: float = 0.0
     room: Optional[str] = None
+    layer: Optional[str] = None
 
 class SpatialGrid:
     """
@@ -47,6 +48,8 @@ class SpatialGrid:
                 tile.is_walkable = True
                 if vt.room:
                     tile.room = vt.room
+                if vt.layer:
+                    tile.layer = vt.layer
             else:
                 self._grid[key] = GridTile(
                     x=vt.x,
@@ -54,7 +57,8 @@ class SpatialGrid:
                     z=vt.z,
                     is_walkable=True,
                     last_seen=now,
-                    room=vt.room
+                    room=vt.room,
+                    layer=vt.layer
                 )
                 self._update_bounds(vt.x, vt.y)
                 new_tiles_count += 1

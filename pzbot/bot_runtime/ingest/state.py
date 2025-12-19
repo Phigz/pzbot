@@ -113,6 +113,7 @@ class Tile(LogExtraFieldsBase):
     y: int
     z: int
     room: Optional[str] = None
+    layer: Optional[str] = None
 
 class WorldObject(LogExtraFieldsBase):
     id: str

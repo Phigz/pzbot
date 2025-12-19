@@ -209,6 +209,9 @@
                                     },
                                     "room": {
                                         "type": "string"
+                                    },
+                                    "layer": {
+                                        "type": "string"
                                     }
                                 }
                             }

@@ -186,17 +186,92 @@ function Sensor.scan(player, gridRadius)
             if sq and sq:isSeen(playerIndex) then
                 -- Tile Info
                 local isWalkable = sq:isFree(false)
-                if isWalkable then
-                     local tileData = { x = x, y = y, z = pz }
+                -- Always include tile if seen, even if blocked (so we can see Walls/Trees)
+                local tileData = { x = x, y = y, z = pz, w = isWalkable }
                      
-                     -- Room Logic
-                     local room = sq:getRoom()
-                     if room then
-                         tileData.room = room:getName()
+                -- Room Logic
+                local room = sq:getRoom()
+                if room then
+                    tileData.room = room:getName()
+                end
+
+                     -- Semantic Layer Logic (Refactored)
+                     local layer = nil
+                     
+                     -- Classification Rules (Priority Order: Higher index = Lower priority check, but we break on success)
+                     -- Actually, we want specific matches to win.
+                     -- Let's check objects first (Trees, Walls), then overlays, then Floor.
+                     
+                     local function classifySprite(sName)
+                        if not sName then return nil end
+                        
+                        -- 1. Trees (Explicitly exclude 'street' to prevent false positives)
+                        if (string.find(sName, "tree") and not string.find(sName, "street")) 
+                           or string.find(sName, "_american_") or string.find(sName, "_canadian_") then
+                            return "Tree"
+                        end
+                        
+                        -- 2. Fences & Walls
+                        if string.find(sName, "fencing") or string.find(sName, "walls_interior") then 
+                            return "FenceLow"
+                        end
+                        if string.find(sName, "walls_exterior_house") then return "Wall" end
+                        if string.find(sName, "walls_exterior") then return "FenceHigh" end
+                        
+                        -- 3. Street / Pavement
+                        if string.find(sName, "street") then return "Street" end
+                        
+                        -- 4. Floors (Interior)
+                        if string.find(sName, "floors_interior") or string.find(sName, "floors_rugs") then return "Floor" end
+                        
+                        -- 5. Vegetation (Catch-all)
+                        if string.find(sName, "vegetation") or string.find(sName, "blends_natural") or string.find(sName, "grass") then
+                            return "Vegetation"
+                        end
+                        
+                        return nil
+                     end
+                     
+                     -- 1. Check Objects (Trees, Fences, etc.)
+                     local objs = sq:getObjects()
+                     if objs then
+                        for i=0, objs:size()-1 do
+                            local o = objs:get(i)
+                            
+                            -- IsoTree override
+                            if instanceof(o, "IsoTree") then 
+                                layer = "Tree"
+                                break 
+                            end
+                            
+                            local sprite = o:getSprite()
+                            if sprite and sprite:getName() then
+                                local found = classifySprite(tostring(sprite:getName()))
+                                if found then
+                                    layer = found
+                                    -- High priority layers break the loop immediately
+                                    if layer == "Tree" or layer == "Wall" or layer == "FenceHigh" then break end
+                                end
+                            end
+                        end
+                     end
+                     
+                     -- 2. Check Floor (if no dominant object layer found yet)
+                     if not layer then
+                        local floor = sq:getFloor()
+                        if floor then
+                            local sprite = floor:getSprite()
+                            if sprite and sprite:getName() then
+                                layer = classifySprite(tostring(sprite:getName()))
+                            end
+                        end
+                     end
+                     
+                     if layer then
+                        tileData.layer = layer
                      end
                      
                      table.insert(vision.tiles, tileData)
-                end
 
                 -- Static Object Info
                 -- Skip zombies here as we already got them

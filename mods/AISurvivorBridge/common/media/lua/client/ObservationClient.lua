@@ -13,7 +13,7 @@ local lastStateWriteTime = 0
 local WRITE_INTERVAL_MS = 200
 
 local lastScanTime = 0
-local SCAN_INTERVAL_MS = 500
+local SCAN_INTERVAL_MS = 100
 
 -- Global state object for this module
 local state = nil

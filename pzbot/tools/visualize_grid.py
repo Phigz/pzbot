@@ -18,38 +18,42 @@ def generate_html_map(grid: SpatialGrid, output_path=None):
     """
     Generates a self-contained HTML file to visualize the grid.
     """
-    tiles_data = []
+    # Collect unique rooms/layers for legend
+    unique_rooms = set()
+    unique_layers = set()
+    
+    tiles_out = []
     for coord, tile in grid._grid.items():
-        tiles_data.append({
+        t_out = {
             "x": tile.x,
             "y": tile.y,
             "z": tile.z,
             "val": 1,
-            "room": getattr(tile, "room", None)
-        })
-    
-    # Calculate bounds dynamically from actual tiles to avoid outliers/ghost data
-    if not tiles_data:
-        bounds = {"min_x": 0, "max_x": 100, "min_y": 0, "max_y": 100}
-    else:
-        xs = [t["x"] for t in tiles_data]
-        ys = [t["y"] for t in tiles_data]
-        bounds = {
-            "min_x": min(xs),
-            "max_x": max(xs),
-            "min_y": min(ys),
-            "max_y": max(ys),
+            "room": getattr(tile, "room", None),
+            "layer": getattr(tile, "layer", None)
         }
-
-    # Collect unique rooms for legend
-    unique_rooms = set()
-    for t in tiles_data:
-        if t.get("room"):
-            unique_rooms.add(t["room"])
+        tiles_out.append(t_out)
+        
+        if t_out["room"]:
+            unique_rooms.add(t_out["room"])
+        if t_out["layer"]:
+            unique_layers.add(t_out["layer"])
     
     # Generate Legend HTML dynamically
-    legend_html = '<div class="legend-item"><div class="box" style="background: #4CAF50"></div> Outdoors</div>'
+    legend_html = ''
     
+    # Layer Legend (Priority)
+    if "Street" in unique_layers: legend_html += '<div class="legend-item"><div class="box" style="background: #555"></div> Street</div>'
+    if "Vegetation" in unique_layers: legend_html += '<div class="legend-item"><div class="box" style="background: #2E7D32"></div> Vegetation</div>'
+    if "Tree" in unique_layers: legend_html += '<div class="legend-item"><div class="box" style="background: #1B5E20"></div> Tree</div>'
+    if "FenceHigh" in unique_layers: legend_html += '<div class="legend-item"><div class="box" style="background: #FF9800"></div> High Fence</div>'
+    if "FenceLow" in unique_layers: legend_html += '<div class="legend-item"><div class="box" style="background: #00BCD4; color: #333"></div> Low Fence</div>'
+    if "Wall" in unique_layers: legend_html += '<div class="legend-item"><div class="box" style="background: #B71C1C"></div> Wall</div>'
+    if "Floor" in unique_layers: legend_html += '<div class="legend-item"><div class="box" style="background: #795548"></div> Floor</div>'
+    
+    # Default
+    legend_html += '<div class="legend-item"><div class="box" style="background: #4CAF50"></div> Default</div>'
+
     # We need to replicate the JS color hashing in Python to generate the correct legend colors
     def string_to_color(s):
         h = 0
@@ -67,7 +71,7 @@ def generate_html_map(grid: SpatialGrid, output_path=None):
         color = string_to_color(room)
         legend_html += f'<div class="legend-item"><div class="box" style="background: {color}"></div> {room}</div>'
 
-    json_data = json.dumps(tiles_data)
+    json_data = json.dumps(tiles_out)
     json_bounds = json.dumps(bounds)
 
     html_content = f"""
@@ -78,8 +82,8 @@ def generate_html_map(grid: SpatialGrid, output_path=None):
     <!-- Auto-refresh every 3 seconds -->
     <meta http-equiv="refresh" content="3">
     <style>
-        body {{ background: #1a1a1a; color: #eee; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; }}
-        canvas {{ border: 1px solid #444; background: #000; image-rendering: pixelated; }}
+        body {{ background: rgba(0, 0, 0, 0); color: #eee; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; }}
+        canvas {{ border: 1px solid #444; background: transparent; image-rendering: pixelated; }}
         #info {{ margin: 10px; }}
         .legend {{ display: flex; gap: 10px; margin: 5px; font-size: 0.8em; flex-wrap: wrap; justify-content: center; }}
         .legend-item {{ display: flex; align-items: center; gap: 5px; background: #333; padding: 2px 6px; border-radius: 4px; }}
@@ -88,7 +92,7 @@ def generate_html_map(grid: SpatialGrid, output_path=None):
 </head>
 <body>
     <h1>World Map</h1>
-    <div id="info">Tiles: {len(tiles_data)} | Bounds: {bounds['min_x']},{bounds['min_y']} to {bounds['max_x']},{bounds['max_y']}</div>
+    <div id="info">Tiles: {len(tiles_out)} | Bounds: {bounds['min_x']},{bounds['min_y']} to {bounds['max_x']},{bounds['max_y']}</div>
     <div class="legend">
         {legend_html}
     </div>
@@ -101,7 +105,7 @@ def generate_html_map(grid: SpatialGrid, output_path=None):
         const canvas = document.getElementById('mapCanvas');
         const ctx = canvas.getContext('2d');
         
-        const TILE_SIZE = 5;
+        const TILE_SIZE = 10;
         const PADDING = 20;
         
         const width = (bounds.max_x - bounds.min_x + 1) * TILE_SIZE + (PADDING * 2);
@@ -127,7 +131,8 @@ def generate_html_map(grid: SpatialGrid, output_path=None):
         }}
         
         function draw() {{
-            ctx.fillStyle = "#000";
+            ctx.clearRect(0, 0, width, height);
+            ctx.fillStyle = "rgba(30, 30, 30, 0.85)";
             ctx.fillRect(0, 0, width, height);
             
             tiles.forEach(t => {{
@@ -135,10 +140,25 @@ def generate_html_map(grid: SpatialGrid, output_path=None):
                 const cx = (t.x - bounds.min_x) * TILE_SIZE + PADDING;
                 const cy = (t.y - bounds.min_y) * TILE_SIZE + PADDING;
                 
+                // Priority: Room > Tree > Layer > Default
                 if (t.room) {{
-                    ctx.fillStyle = stringToColor(t.room); // Unique color per room name
+                    ctx.fillStyle = stringToColor(t.room);
+                }} else if (t.layer === "Tree") {{
+                    ctx.fillStyle = "#1B5E20"; // Dark Forest Green
+                }} else if (t.layer === "Vegetation") {{
+                    ctx.fillStyle = "#2E7D32"; // Green
+                }} else if (t.layer === "Street") {{
+                    ctx.fillStyle = "#555"; // Asphalt
+                }} else if (t.layer === "Floor") {{
+                    ctx.fillStyle = "#795548"; // Brown
+                }} else if (t.layer === "FenceHigh") {{
+                    ctx.fillStyle = "#FF9800"; // Orange (High / Climb)
+                }} else if (t.layer === "FenceLow") {{
+                    ctx.fillStyle = "#00BCD4"; // Cyan (High Contrast vs Orange)
+                }} else if (t.layer === "Wall") {{
+                    ctx.fillStyle = "#B71C1C"; // Red (Solid Wall)
                 }} else {{
-                    ctx.fillStyle = "#4CAF50"; // Green for outdoors
+                    ctx.fillStyle = "#4CAF50"; // Default Green (Grass/Unknown)
                 }}
                 
                 ctx.fillRect(cx, cy, TILE_SIZE - 1, TILE_SIZE - 1);
