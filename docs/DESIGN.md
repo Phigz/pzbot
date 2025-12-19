@@ -141,12 +141,13 @@ The mod writes perception data to `state.json`.
 
 ## 5. Roadmap
 
-### Phase 1: Foundation (DONE)
+### Phase 1: Foundation (TODO)
 - [x] **Bi-directional Communication**: Lua ↔ Python bridge.
 - [x] **State Perception**: Reading health, stats, nearby zombies.
 - [x] **World Modeling**: Persistent grid memory and entity tracking.
 - [x] **Visualization**: Live HTML map.
 - [x] **Automation**: Auto-launch "New Game".
+- [ ] **[STRETCH] Simulation Speed Resilience**: Graceful handling of game fast-forward (2x/3x/5x).
 
 ### Phase 2: World Modeling (WIP)
 - [x] **Spacial Grid Memory**: Sparse persistent map of discovered tiles.
@@ -155,9 +156,14 @@ The mod writes perception data to `state.json`.
 - [ ] **Semantic World Labels**: Buildings, rooms, interiors vs exteriors, etc.
 - [ ] **Resource Awareness**: Known loot loctaions, seen container memory, etc.
 - [ ] **Threat Modeling**: Zombie density, chase states, line-of-sight danger, etc.
-- [ ] **Event Awareness**: Gunshots, explosions, etc.
+- [ ] **Event Awareness**: Gunshots, explosions, player chat, etc.
+- [ ] **Brain State Serialization**: Save/Load mechanism for persistent world knowledge across sessions.
+- [ ] **Social Awareness**: Memory of players, behavior, etc.
 
 #### Implementation Notes
+- Consumes the state
+- Emits the world model
+
 This phase answers:
 > "What exists in the world, where is it, and how reliable is my knowledge?"
 
@@ -165,6 +171,8 @@ This phase answers:
 - [ ] **Threat Response**: Depends on if threat is zombie or player.
 - [ ] **Critical Needs**: Bleeding, starving, etc.
 - [ ] **Local Navigation**: Avoid blocked or dangerous tiles, re-pathing.
+- [ ] **Interrupt Architecture**: Subsumption-style logic where raw safety (fleeing) suppresses tactical plans.
+- [ ] **Social Response**: How to interact with other players.
 
 #### Implementation Notes
 - Consumes the world model
@@ -179,6 +187,8 @@ This phase answers:
 - [ ] **Multi-step Planning**: Navigate -> interact -> wait -> observe -> react.
 - [ ] **Inventory & Resource Constraints**: Capacity-aware looting, tool requirements, etc.
 - [ ] **Risk Evaluation**: Zombie density vs reward, escape path availability, etc.
+- [ ] **Objective Failure Handling**: Re-planning and learning from failed attempts (e.g. locked doors).
+- [ ] **Social Planning**: How to interact with other players (e.g. trading, short-term cooperation, avoidance, etc).
 
 #### Implementation Notes
 - Likely hybrid:
@@ -190,10 +200,15 @@ This phase answers:
  - Recoverable on failure
 
 This phase answers: 
-> "What must I do right now to avoid dying?"
+> "How do I achieve my current objective safely and efficiently?"
 
 ### Phase 5: Strategic and Long-Term Planning (TODO)
-- [ ] **Long-Term Memory**: 
+- [ ] **Long-Term Goal Formation**: Base building, skill training, etc.
+- [ ] **Persistent Memory**: Important locations, past encounters, learned risks, etc.
+- [ ] **Preference Modeling**: Risk tolerance, playstyle bias, personal "values", etc.
+- [ ] **Personality & Archetypes**: Defining traits (Brave, Cowardly, Looter) that guide LLM intent.
+- [ ] **Context Summarization**: Translating raw World Model data into semantic natural language for LLM reasoning.
+- [ ] **Relationship Management**: High-level social strategy and group alignment.
 
 #### Implementation Notes
 - LLM-backed orchestration layer
