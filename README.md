@@ -34,8 +34,6 @@ Utilities to streamline the development and testing loop.
 
 Detailed installation and setup instructions have been temporarily removed as the codebase is undergoing significant refactoring. Please check back later for updated guides.
 
-If you are a contributor, please refer to the `docs/` folder or contact the maintainers for dev-setup instructions.
-
 ---
 
 ## 🗺️ Roadmap
