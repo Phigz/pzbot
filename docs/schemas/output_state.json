@@ -183,6 +183,80 @@
                 },
                 "inventory": {
                     "type": "object"
+                },
+                "vision": {
+                    "type": "object",
+                    "properties": {
+                        "scan_radius": {
+                            "type": "integer"
+                        },
+                        "timestamp": {
+                            "type": "integer"
+                        },
+                        "tiles": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "x": {
+                                        "type": "integer"
+                                    },
+                                    "y": {
+                                        "type": "integer"
+                                    },
+                                    "z": {
+                                        "type": "integer"
+                                    }
+                                }
+                            }
+                        },
+                        "objects": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {
+                                        "type": "string"
+                                    },
+                                    "type": {
+                                        "type": "string"
+                                    },
+                                    "x": {
+                                        "type": "number"
+                                    },
+                                    "y": {
+                                        "type": "number"
+                                    },
+                                    "z": {
+                                        "type": "number"
+                                    },
+                                    "meta": {
+                                        "type": "object"
+                                    }
+                                }
+                            }
+                        },
+                        "neighbors": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "object",
+                                "properties": {
+                                    "x": {
+                                        "type": "integer"
+                                    },
+                                    "y": {
+                                        "type": "integer"
+                                    },
+                                    "status": {
+                                        "type": "string"
+                                    },
+                                    "objects": {
+                                        "type": "array"
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         },

@@ -1,12 +1,16 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Bot Input Command",
-  "description": "A packet sent from the Bot Brain to the PZ Bridge via Socket.",
+  "description": "A packet sent from the Bot Brain to the PZ Bridge via File System.",
   "type": "object",
   "properties": {
     "id": {
       "type": "string",
       "description": "Unique UUID for this command batch. Used for acknowledgement."
+    },
+    "sequence_number": {
+      "type": "integer",
+      "description": "Monotonically increasing sequence number for this batch. Lua uses this to detect new commands."
     },
     "timestamp": {
       "type": "integer",
@@ -45,9 +49,14 @@
             "description": "Parameters specific to the action type."
           }
         },
-        "required": ["type"]
+        "required": [
+          "type"
+        ]
       }
     }
   },
-  "required": ["id", "actions"]
+  "required": [
+    "id",
+    "actions"
+  ]
 }

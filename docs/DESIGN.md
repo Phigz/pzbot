@@ -43,6 +43,10 @@ The **World Model** is the bot's internal representation of the game state. It a
 ### 3.1. Vision Ingestion
 - **Source**: `state.json` (Lua Mod)
 - **Radius**: All entities (Zombies, Items) are scanned at 50 tiles.
+- **Structure**:
+    - `tiles`: List of walkable coordinates `(x, y, z)` currently in LoS.
+    - `objects`: Dynamic entries (Zombies, Players) and static interactables (Doors, Windows, Containers).
+    - `neighbors`: 3x3 immediate adjacency grid for rapid local avoidance and state checks.
 
 ### 3.2. Entity Manager
 - **Responsibility**: Tracks dynamic actors (Zombies, Players, Items).
@@ -118,7 +122,13 @@ The mod writes perception data to `state.json`.
     "moodles": {},
     "traits": [],
     "skills": {},
-    "inventory": {}
+    "inventory": {},
+    "vision": {
+      "scan_radius": 15,
+      "tiles": [ { "x": 10909, "y": 9995, "z": 0 } ],
+      "objects": [ { "id": "1845", "type": "Zombie", "x": 10912, "y": 9998, "meta": { "state": "CHASING" } } ],
+      "neighbors": { "n": { "status": "walkable" }, "s": { "status": "blocked" } }
+    }
   },
   "environment": {
     "nearby_containers": []
