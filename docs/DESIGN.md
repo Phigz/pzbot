@@ -99,14 +99,29 @@ The mod writes perception data to `state.json`.
 ```json
 {
   "timestamp": 1234567890,
+  "tick": 1234,
   "player": {
-    "position": { "x": 0, "y": 0, "z": 0 },
-    "body": { "health": 100 },
-    "vision": {
-      "tiles": [{ "x": 100, "y": 100, "z": 0 }],
-      "objects": [{ "type": "Zombie", "x": 100, "y": 100, "meta": { "state": "chasing" } }]
-    }
-  }
+    "status": "idle",
+    "vitals": { "health": 100, "stamina": 1, "hunger": 0, "panic": 0 },
+    "active_action_id": "uuid-string",
+    "position": { "x": 10909.5, "y": 9995.2, "z": 0 },
+    "state": { "aiming": false, "sneaking": false, "running": false, "is_sitting": false },
+    "body": {
+      "health": 100,
+      "temperature": 37.0,
+      "parts": {
+        "Hand_L": { "health": 100, "bleeding": false, "bitten": false }
+      }
+    },
+    "moodles": {},
+    "traits": [],
+    "skills": {},
+    "inventory": {}
+  },
+  "environment": {
+    "nearby_containers": []
+  },
+  "events": []
 }
 ```
 
