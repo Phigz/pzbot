@@ -1,0 +1,42 @@
+┌───────────────────────────┐
+│ PZ Mod (Lua)              │
+│ - Writes observation.json │  every 200 ms
+└─────────────┬─────────────┘
+              ↓
+┌───────────────────────────┐
+│ Observation Ingestor      │
+│ - Reads file              │
+│ - Normalizes              │
+│ - Timestamps              │
+└─────────────┬─────────────┘
+              ↓
+┌───────────────────────────┐
+│ World Model / Belief      │
+│ State                     │
+│ - Rolling window          │
+│ - Deltas                  │
+│ - Derived facts           │
+└─────────────┬─────────────┘
+              ↓
+┌───────────────────────────┐
+│ Decision Gate             │
+│ - Should we reason now?   │
+│ - Event-based triggers    │
+│ - Cooldowns               │
+└─────────────┬─────────────┘
+              ↓
+┌───────────────────────────┐
+│ Planner (LLM)             │
+│ - High-level decisions    │
+│ - Goal updates            │
+└─────────────┬─────────────┘
+              ↓
+┌───────────────────────────┐
+│ Plan Decomposer           │
+│ - Intent → actions        │
+│ - Validation              │
+└─────────────┬─────────────┘
+              ↓
+┌───────────────────────────┐
+│ Action Queue → Mod        │
+└───────────────────────────┘

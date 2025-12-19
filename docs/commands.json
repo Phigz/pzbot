@@ -1,0 +1,10 @@
+# Purpose: “What I intend to do next.”
+{
+  "command_id": "cmd_001",
+  "issued_at": 123450,
+  "commands": [
+    { "type": "travel", "target": { "x": 10240, "y": 8770 } },
+    { "type": "interact", "action": "Harvest" },
+    { "type": "return", "target": "base" }
+  ]
+}

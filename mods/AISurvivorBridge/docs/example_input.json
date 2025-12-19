@@ -1,0 +1,43 @@
+{
+  "sequence_number": 1,
+  "id": "test_sequence_manual_01",
+  "timestamp": 123456789,
+  "clear_queue": true,
+  "actions": [
+    {
+      "id": "uuid-wait-1",
+      "type": "wait",
+      "params": {
+        "duration_ms": 2000
+      }
+    },
+    {
+      "id": "uuid-look-1",
+      "type": "look_to",
+      "params": {
+        "x": 10000,
+        "y": 10000
+      }
+    },
+    {
+      "id": "uuid-wait-2",
+      "type": "wait",
+      "params": {
+        "duration_ms": 1000
+      }
+    },
+    {
+      "id": "uuid-look-2",
+      "type": "look_to",
+      "params": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "uuid-sit-1",
+      "type": "sit",
+      "params": {}
+    }
+  ]
+}

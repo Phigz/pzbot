@@ -1,0 +1,38 @@
+┌────────────────────────────────────────────────────────────┐
+│                    Project Zomboid Server                    │
+│                                                            │
+│   - Vanilla or modded                                      │
+│   - Authoritative simulation                               │
+│   - Treats AI as normal player                             │
+└───────────────▲───────────────────────────────▲────────────┘
+                │ Multiplayer protocol           │
+                │                                │
+┌───────────────┴───────────────┐   ┌───────────┴───────────┐
+│     PZ Client (Bot Instance)   │   │     Human Players      │
+│                                │   │                       │
+│  ┌─────────────────────────┐  │   │                       │
+│  │      Bridge Mod (Lua)    │◄─┼───┘                       │
+│  │                         │  │
+│  │  - Observations          │  │
+│  │  - Actuators             │  │
+│  │  - Safety overrides      │  │
+│  └──────────▲──────────────┘  │
+│             │ File / IPC       │
+└─────────────┼─────────────────┘
+              │
+┌─────────────▼────────────────────────────────────────────┐
+│                   Bot Runtime (Local)                      │
+│                                                            │
+│  - Owns bot identity                                       │
+│  - Loads config/personality                                │
+│  - Runs planner loop                                       │
+│  - Reads state, writes commands                             │
+│                                                            │
+│  ┌──────────────────────────────────────────────────────┐ │
+│  │               Planner Module                          │ │
+│  │                                                      │ │
+│  │  - Rule-based fallback                                │ │
+│  │  - Optional local LLM                                 │ │
+│  │  - Intent + task generation                           │ │
+│  └──────────────────────────────────────────────────────┘ │
+└────────────────────────────────────────────────────────────┘

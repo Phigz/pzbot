@@ -1,0 +1,37 @@
+┌───────────────────────────┐
+│ Project Zomboid Client    │
+│ + AISurvivorBridge (Lua)  │
+│                           │
+│ - Writes observation.json │
+│ - Reads action.json       │
+└─────────────┬─────────────┘
+              │ (filesystem IPC)
+              ▼
+┌───────────────────────────┐
+│ Agent Runtime (Python)    │   ← Single process (initially)
+│                           │
+│ ┌───────────────────────┐ │
+│ │ 1. Observation        │ │
+│ │    Ingestor           │ │
+│ └──────────┬────────────┘ │
+│            ▼              │
+│ ┌───────────────────────┐ │
+│ │ 2. World / Belief     │ │
+│ │    Model              │ │
+│ └──────────┬────────────┘ │
+│            ▼              │
+│ ┌───────────────────────┐ │
+│ │ 3. Tactical Controller│ │
+│ │    (Low-order)        │ │
+│ └──────────┬────────────┘ │
+│            ▼              │
+│ ┌───────────────────────┐ │
+│ │ 4. Strategic Planner  │ │
+│ │    (High-order LLM)   │ │
+│ └──────────┬────────────┘ │
+│            ▼              │
+│ ┌───────────────────────┐ │
+│ │ Action Synthesizer    │ │
+│ │ → action.json         │ │
+│ └───────────────────────┘ │
+└───────────────────────────┘

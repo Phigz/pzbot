@@ -1,0 +1,202 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Bot Output State",
+    "description": "A continuous stream of state updates sent from PZ Bridge to Bot Brain.",
+    "type": "object",
+    "properties": {
+        "timestamp": {
+            "type": "integer"
+        },
+        "tick": {
+            "type": "integer"
+        },
+        "player": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "idle",
+                        "moving",
+                        "acting",
+                        "dead"
+                    ]
+                },
+                "vitals": {
+                    "type": "object",
+                    "properties": {
+                        "health": {
+                            "type": "number"
+                        },
+                        "stamina": {
+                            "type": "number"
+                        },
+                        "hunger": {
+                            "type": "number"
+                        },
+                        "panic": {
+                            "type": "number"
+                        }
+                    }
+                },
+                "active_action_id": {
+                    "type": "string",
+                    "description": "The ID of the action currently ensuring execution."
+                },
+                "position": {
+                    "type": "object",
+                    "properties": {
+                        "x": {
+                            "type": "number"
+                        },
+                        "y": {
+                            "type": "number"
+                        },
+                        "z": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "state": {
+                    "type": "object",
+                    "description": "Detailed boolean flags indicating player actions and states",
+                    "properties": {
+                        "aiming": {
+                            "type": "boolean"
+                        },
+                        "sneaking": {
+                            "type": "boolean"
+                        },
+                        "running": {
+                            "type": "boolean"
+                        },
+                        "sprinting": {
+                            "type": "boolean"
+                        },
+                        "in_vehicle": {
+                            "type": "boolean"
+                        },
+                        "is_sitting": {
+                            "type": "boolean"
+                        },
+                        "asleep": {
+                            "type": "boolean"
+                        },
+                        "moving": {
+                            "type": "boolean"
+                        },
+                        "driving": {
+                            "type": "boolean"
+                        },
+                        "bumped": {
+                            "type": "boolean"
+                        },
+                        "climbing": {
+                            "type": "boolean"
+                        },
+                        "attacking": {
+                            "type": "boolean"
+                        }
+                    }
+                },
+                "body": {
+                    "type": "object",
+                    "description": "Physical health and individual body part status",
+                    "properties": {
+                        "health": {
+                            "type": "number",
+                            "description": "Overall body health (0-100)"
+                        },
+                        "temperature": {
+                            "type": "number",
+                            "description": "Core body temperature"
+                        },
+                        "parts": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "object",
+                                "properties": {
+                                    "health": {
+                                        "type": "number"
+                                    },
+                                    "bandaged": {
+                                        "type": "boolean"
+                                    },
+                                    "bleeding": {
+                                        "type": "boolean"
+                                    },
+                                    "bitten": {
+                                        "type": "boolean"
+                                    },
+                                    "scratched": {
+                                        "type": "boolean"
+                                    },
+                                    "deep_wound": {
+                                        "type": "boolean"
+                                    },
+                                    "pain": {
+                                        "type": "number"
+                                    },
+                                    "stitch": {
+                                        "type": "boolean"
+                                    },
+                                    "burn": {
+                                        "type": "boolean"
+                                    },
+                                    "fracture": {
+                                        "type": "boolean"
+                                    },
+                                    "glass": {
+                                        "type": "boolean"
+                                    },
+                                    "splinted": {
+                                        "type": "boolean"
+                                    },
+                                    "bullet": {
+                                        "type": "boolean"
+                                    },
+                                    "infection": {
+                                        "type": "number"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "moodles": {
+                    "type": "object"
+                },
+                "traits": {
+                    "type": "array"
+                },
+                "skills": {
+                    "type": "object"
+                },
+                "profession": {
+                    "type": "string"
+                },
+                "attached": {
+                    "type": "object"
+                },
+                "equipped": {
+                    "type": "object"
+                },
+                "inventory": {
+                    "type": "object"
+                }
+            }
+        },
+        "environment": {
+            "type": "object",
+            "properties": {
+                "nearby_containers": {
+                    "type": "array"
+                }
+            }
+        },
+        "events": {
+            "type": "array",
+            "description": "Discrete events since last packet (e.g., 'ZombieSpotted', 'DamageTaken')."
+        }
+    }
+}

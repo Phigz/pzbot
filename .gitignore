@@ -1,0 +1,44 @@
+# Ignore everything by default
+/*
+
+# Whitelist specific top-level folders/files
+!/dev_tools
+!/pzbot
+!/mods
+!/docs
+!/README.md
+!/.gitignore
+
+# Mods: Ignore everything except AISurvivorBridge
+/mods/*
+!/mods/AISurvivorBridge
+
+# Python Artifacts
+**/__pycache__/
+**/*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.git/
+
+# Game Artifacts (Double verify exclusion)
+/Saves
+/Logs
+/Lua
+/db
+/Server
+/screenshots
+/console.txt
+/options.ini

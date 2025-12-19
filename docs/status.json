@@ -1,0 +1,7 @@
+# Purpose: “What happened when I tried.”
+{
+  "command_id": "cmd_001",
+  "state": "FAILED",
+  "reason": "panic_override",
+  "timestamp": 123470
+}

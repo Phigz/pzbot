@@ -1,0 +1,34 @@
+# Purpose: “What I currently know about myself and my surroundings.”
+{
+  "timestamp": 123456,
+  "self": {
+    "health": 0.92,
+    "hunger": 0.61,
+    "fatigue": 0.34,
+    "panic": 0.10
+  },
+  "position": {
+    "x": 10234,
+    "y": 8765,
+    "z": 0,
+    "indoors": true
+  },
+  "threats": {
+    "nearby_zombies": 4,
+    "visible_zombies": 2
+  },
+  "inventory": {
+    "food": 2,
+    "medical": 1,
+    "weapons": ["Base.Axe"],
+    "unknown_items": ["Hydrocraft.HCBeeswax"]
+  },
+  "nearby_objects": [
+    {
+      "sprite": "hc_beehive_01",
+      "distance": 2.1,
+      "context_actions": ["Harvest"]
+    }
+  ],
+  "current_task": "idle"
+}
