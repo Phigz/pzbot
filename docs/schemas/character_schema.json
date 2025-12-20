@@ -1,0 +1,101 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Character Design Template",
+  "description": "Definition for a PZBot NPC character, including mechanics and personality.",
+  "type": "object",
+  "properties": {
+    "core_identity": {
+      "type": "object",
+      "properties": {
+        "full_name": { "type": "string" },
+        "nickname": { "type": "string" },
+        "age": { "type": "integer", "minimum": 18 },
+        "gender": { "type": "string", "enum": ["Male", "Female"] },
+        "occupation_pre_apocalypse": { "type": "string", "description": "e.g. Fire Officer, Chef" },
+        "origin": { "type": "string", "description": "Hometown or origin location" }
+      },
+      "required": ["full_name", "age", "gender"]
+    },
+    "game_attributes": {
+      "type": "object",
+      "properties": {
+        "profession": { "type": "string" },
+        "positive_traits": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "negative_traits": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "starting_skills": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" },
+          "description": "Map of skill name to level, e.g. {'Carpentry': 2}"
+        }
+      },
+      "required": ["profession"]
+    },
+    "physical_description": {
+      "type": "object",
+      "properties": {
+        "base_appearance": { "type": "string", "description": "Static traits like height, eye color" },
+        "body_weight_tendency": { "type": "string", "description": "Dynamic weight fluctuation tendency" },
+        "grooming_habits": { "type": "string" },
+        "clothing_strategy": {
+          "type": "object",
+          "properties": {
+            "preferred_aesthetic": { "type": "string" },
+            "survival_compromises": { "type": "string" }
+          }
+        }
+      }
+    },
+    "personality": {
+      "type": "object",
+      "properties": {
+        "archetype": { "type": "string" },
+        "core_values": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "fears_and_phobias": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "motivations": { "type": "string" },
+        "dialogue_style": {
+          "type": "object",
+          "properties": {
+            "tone": { "type": "string" },
+            "catchphrases": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "background_lore": {
+      "type": "string",
+      "description": "Narrative history of the character."
+    },
+    "behavioral_tendencies": {
+      "type": "object",
+      "properties": {
+        "combat_preference": {
+          "type": "string",
+          "enum": ["Fight", "Flight", "Stealth", "Negotiate"]
+        },
+        "looting_priority": { "type": "string" },
+        "idle_behaviors": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "social_stance": { "type": "string" }
+      },
+      "required": ["combat_preference"]
+    }
+  },
+  "required": ["core_identity", "game_attributes", "behavioral_tendencies"]
+}

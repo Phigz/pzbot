@@ -57,6 +57,10 @@
                         }
                     }
                 },
+                "rotation": {
+                    "type": "number",
+                    "description": "Player facing angle in degrees (0-360)"
+                },
                 "state": {
                     "type": "object",
                     "description": "Detailed boolean flags indicating player actions and states",

@@ -233,3 +233,41 @@ This phase answers:
 This phase answers:
 > "Who am I, and what kind of survivor am I trying to be?"
 
+---
+
+## 6. Character Design System
+We use a structured system to define bot personalities and capabilities, ensuring consistency between roleplay elements (LLM context) and in-game mechanics (skills, traits).
+
+### 6.1. Design Template (`docs/character_design_sheet.md`)
+A markdown template used to brainstorm and define:
+- **Core Identity**: Name, age, origin, and pre-apocalypse occupation.
+- **Game Mechanics**: Profession, traits (positive/negative), and starting skills.
+- **Dynamic Physicality**: Appearance, weight tendencies, and clothing strategies that evolve during play.
+- **Behavioral Logic**: Explicit preferences for combat (Fight/Flight), looting, and socialization.
+
+### 6.2. JSON Schema (`docs/schemas/character_schema.json`)
+A formal JSON Schema definition that validates character files. This integration allows us to:
+- Programmatically generate unique bot backstories.
+- Validate that traits and professions match game data.
+- Load personality parameters directly into the bot's logic engine at runtime.
+
+---
+
+## 7. Development Infrastructure: The Mock Bridge
+To avoid the slow "reload game" loop of Project Zomboid modding, we use a **Mock Bridge** (`pzbot/tools/mock_bridge`) to emulate the game environment.
+
+### 7.1. Purpose
+- **Resilience**: Decouples bot logic development from the game client.
+- **Speed**: Allows instant startup and reproducible scenarios.
+- **Verification**: Enforces schema compliance between the Lua Mod and Python Bot.
+
+### 7.2. Architecture
+- **State Factory**: Generates valid `state.json` payloads compliant with `docs/schemas/output_state.json`.
+- **Scenarios**: Pre-defined setups (e.g., `basic`, `surrounded`) that inject entities into the mock world.
+- **Schema Validation**: The mock bridge validates its own output at runtime to ensure it never "lies" to the bot about the API contract.
+
+### 7.3. Testing Strategy
+- **Unit Tests**: `pzbot/tools/mock_bridge/tests` verify that the Mock Bridge follows the schema.
+- **Visual Validation**: Connecting the Mock Bridge to the `visualize_grid.py` tool allows developers to "see" what the bot would see in-game.
+
+

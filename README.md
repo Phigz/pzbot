@@ -26,12 +26,34 @@ Utilities to streamline the development and testing loop.
 *   **`configure_launch.py`**: Manages launch configurations (New Game vs. Continue).
 *   **`click_start_check.py`**: Automates the "Click to Start" interaction to ensure zero-interaction boot-up.
 *   **`tools/visualize_grid.py`**: A live HTML map visualizer to inspect the bot's internal world model.
+*   **`tools/mock_bridge`**: A standalone emulator that mimics the game's Lua API, allowing for offline testing and rapid iteration of bot logic against specific scenarios (e.g., combat, pathfinding).
 
 ---
 
 ## � Usage
 
-**Currently a heavy WIP, usage and setup instructions are not yet available.**
+**To run the bot in a simulated environment (Mock Bridge):**
+1.  **Launch the Mock Bridge:**
+    ```bash
+    # Standard mode (Empty room)
+    python3 -m pzbot.tools.mock_bridge.main --dir ./data
+    
+    # Scene mode (e.g., 2 zombies)
+    python3 -m pzbot.tools.mock_bridge.main --scenario basic --dir ./data
+    ```
+2.  **Launch the Bot Brain:**
+    ```bash
+    python3 -m pzbot.bot_runtime.main
+    ```
+3.  **Visualize:**
+    ```bash
+    python3 -m pzbot.tools.visualize_grid
+    ```
+
+**To run the test suite:**
+```bash
+python3 -m pytest pzbot/tools/mock_bridge/tests
+```
 
 ---
 
@@ -46,6 +68,7 @@ Utilities to streamline the development and testing loop.
 
 ### Phase 2: Survival Competence
 - [x] **Navigation**: A* Pathfinding integration (Python-side).
+- [x] **Simulation**: Mock Bridge for offline development and testing.
 - [ ] **Combat Logic**: Basic kiting and melee engagement rules.
 - [ ] **Looting Loop**: Identification of valuable items and inventory management.
 
@@ -59,6 +82,7 @@ Utilities to streamline the development and testing loop.
 ## 📚 Documentation
 Detailed documentation is available in the `docs/` directory:
 *   [Design & Architecture](docs/DESIGN.md)
+*   [Character Design Sheet](docs/character_design_sheet.md)
 *   [Input/State Schemas](docs/schemas/)
 
 ---
