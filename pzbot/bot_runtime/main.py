@@ -56,7 +56,22 @@ def main():
             
             # Periodic Snapshot
             if time.time() - last_snapshot_time > SNAPSHOT_INTERVAL:
-                world_model.grid.save_snapshot(str(snapshot_path))
+                # Extract Persistent Resource Data from EntityManager
+                def transform_entities(entities):
+                    res = []
+                    for e in entities:
+                        # Base fields
+                        d = e.model_dump(exclude={'properties'})
+                        # Merge properties (flatten)
+                        if e.properties:
+                            d.update(e.properties)
+                        res.append(d)
+                    return res
+
+                w_items = transform_entities(world_model.entities.get_known_items())
+                n_containers = transform_entities(world_model.entities.get_known_containers())
+                
+                world_model.grid.save_snapshot(str(snapshot_path), world_items=w_items, nearby_containers=n_containers)
                 last_snapshot_time = time.time()
 
     except KeyboardInterrupt:

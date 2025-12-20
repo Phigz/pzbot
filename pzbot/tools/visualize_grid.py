@@ -11,9 +11,12 @@ from bot_runtime.world.grid import SpatialGrid, GridTile
 
 import time
 
-def generate_html_map(grid: SpatialGrid, output_path=None):
+def generate_html_map(grid: SpatialGrid, output_path=None, world_items=None, nearby_containers=None):
     if output_path is None:
         output_path = os.path.join(os.path.dirname(__file__), "map_view.html")
+    
+    world_items = world_items or []
+    nearby_containers = nearby_containers or []
         
     """
     Generates a self-contained HTML file to visualize the grid.
@@ -53,6 +56,8 @@ def generate_html_map(grid: SpatialGrid, output_path=None):
     
     # Default
     legend_html += '<div class="legend-item"><div class="box" style="background: #4CAF50"></div> Default</div>'
+    legend_html += '<div class="legend-item"><div class="box" style="background: #FFD700; border-radius: 50%"></div> Container</div>'
+    legend_html += '<div class="legend-item"><div class="box" style="background: #00FFFF; border-radius: 50%; width: 6px; height: 6px;"></div> Item</div>'
 
     # We need to replicate the JS color hashing in Python to generate the correct legend colors
     def string_to_color(s):
@@ -72,9 +77,12 @@ def generate_html_map(grid: SpatialGrid, output_path=None):
         legend_html += f'<div class="legend-item"><div class="box" style="background: {color}"></div> {room}</div>'
 
     json_data = json.dumps(tiles_out)
+    json_items = json.dumps(world_items)
+    json_containers = json.dumps(nearby_containers)
     json_bounds = json.dumps(bounds)
 
-    html_content = f"""
+    # Prepare HTML template (NOT an f-string to avoid brace escaping issues)
+    html_template = """
 <!DOCTYPE html>
 <html>
 <head>
@@ -82,30 +90,79 @@ def generate_html_map(grid: SpatialGrid, output_path=None):
     <!-- Auto-refresh every 3 seconds -->
     <meta http-equiv="refresh" content="3">
     <style>
-        body {{ background: rgba(0, 0, 0, 0); color: #eee; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; }}
-        canvas {{ border: 1px solid #444; background: transparent; image-rendering: pixelated; }}
-        #info {{ margin: 10px; }}
-        .legend {{ display: flex; gap: 10px; margin: 5px; font-size: 0.8em; flex-wrap: wrap; justify-content: center; }}
-        .legend-item {{ display: flex; align-items: center; gap: 5px; background: #333; padding: 2px 6px; border-radius: 4px; }}
-        .box {{ width: 10px; height: 10px; }}
+        body {{ background: #111; color: #eee; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; }}
+        h1 {{ margin: 0 0 10px 0; }}
+        canvas {{ border: 1px solid #444; background: #222; image-rendering: pixelated; }}
+        #container {{ display: flex; gap: 20px; align-items: flex-start; }}
+        #mapColumn {{ display: flex; flex-direction: column; align-items: center; }}
+        #sidebar {{ width: 300px; background: #222; padding: 15px; border-radius: 8px; border: 1px solid #444; max-height: 80vh; overflow-y: auto; }}
+        body { background: #111; color: #eee; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; }
+        h1 { margin: 0 0 10px 0; }
+        canvas { border: 1px solid #444; background: #222; image-rendering: pixelated; }
+        #container { display: flex; gap: 20px; align-items: flex-start; }
+        #mapColumn { display: flex; flex-direction: column; align-items: center; }
+        #sidebar { width: 300px; background: #222; padding: 15px; border-radius: 8px; border: 1px solid #444; max-height: 80vh; overflow-y: auto; }
+        #info { margin: 10px; font-size: 0.9em; color: #aaa; }
+        .legend { display: flex; gap: 8px; margin: 5px; font-size: 0.8em; flex-wrap: wrap; justify-content: center; max-width: 800px; }
+        .legend-item { display: flex; align-items: center; gap: 5px; background: #333; padding: 3px 8px; border-radius: 4px; }
+        .box { width: 12px; height: 12px; border: 1px solid rgba(255,255,255,0.2); }
+        
+        h2 { font-size: 1.1em; border-bottom: 1px solid #444; padding-bottom: 5px; margin-top: 0; }
+        ul { list-style: none; padding: 0; margin: 0; }
+        li { padding: 8px; border-bottom: 1px solid #333; font-size: 0.9em; }
+        li:last-child { border-bottom: none; }
+        .item-count { float: right; color: #aaa; font-size: 0.8em; }
+        .container-header { font-weight: bold; color: #FFD700; margin-bottom: 4px; display: flex; justify-content: space-between; }
+        .item-row { display: flex; justify-content: space-between; color: #ccc; }
+        .world-item { color: #00FFFF; }
+        
+        /* Ghost Styling */
+        .ghost { opacity: 0.5; filter: grayscale(100%); }
+        .ghost-label { font-size: 0.7em; color: #666; font-style: italic; margin-left: 5px; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #222; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
     </style>
 </head>
 <body>
-    <h1>World Map</h1>
-    <div id="info">Tiles: {len(tiles_out)} | Bounds: {bounds['min_x']},{bounds['min_y']} to {bounds['max_x']},{bounds['max_y']}</div>
-    <div class="legend">
-        {legend_html}
+    <h1>World Map & Resources</h1>
+    
+    <div id="container">
+        <div id="mapColumn">
+            <div id="info">Tiles: {{TILE_COUNT}} | Bounds: {{BOUNDS_TEXT}}</div>
+            <div class="legend">
+                {{LEGEND_HTML}}
+            </div>
+            <div id="status" style="font-size: 0.8em; color: #888; margin-bottom: 5px;">Live Updating...</div>
+            <canvas id="mapCanvas"></canvas>
+        </div>
+        
+        <div id="sidebar">
+            <h2>Nearby Containers ({{CONTAINER_COUNT}})</h2>
+            <ul id="containerList">
+                <!-- Populated by JS -->
+            </ul>
+            
+            <h2 style="margin-top: 20px;">World Items ({{ITEM_COUNT}})</h2>
+            <ul id="worldItemList">
+                <!-- Populated by JS -->
+            </ul>
+        </div>
     </div>
-    <div id="status" style="font-size: 0.8em; color: #888;">Live Updating...</div>
-    <canvas id="mapCanvas"></canvas>
+
     <script>
-        const tiles = {json_data};
-        const bounds = {json_bounds};
+        const tiles = {{JSON_DATA}};
+        const items = {{JSON_ITEMS}};
+        const containers = {{JSON_CONTAINERS}};
+        const bounds = {{JSON_BOUNDS}};
         
         const canvas = document.getElementById('mapCanvas');
         const ctx = canvas.getContext('2d');
         
-        const TILE_SIZE = 10;
+        const TILE_SIZE = 12; // Slightly larger
         const PADDING = 20;
         
         const width = (bounds.max_x - bounds.min_x + 1) * TILE_SIZE + (PADDING * 2);
@@ -114,62 +171,171 @@ def generate_html_map(grid: SpatialGrid, output_path=None):
         canvas.width = width;
         canvas.height = height;
         
+        // --- RENDER LISTS ---
+        function renderLists() {
+            // Containers
+            const cList = document.getElementById('containerList');
+            cList.innerHTML = ''; // Clear previous list
+            if (containers.length === 0) {
+                cList.innerHTML = '<li style="color: #666; font-style: italic;">No containers in reach</li>';
+            } else {
+                containers.forEach(c => {
+                    const li = document.createElement('li');
+                    const isVisible = c.is_visible !== false; // Default true
+                    
+                    if (!isVisible) li.className = 'ghost';
+                    
+                    let itemsHtml = '';
+                    if (c.items && c.items.length > 0) {
+                        itemsHtml = c.items.map(it => `<div class="item-row"><span>${it.name}</span><span class="item-count">x${it.count}</span></div>`).join('');
+                    } else {
+                        itemsHtml = '<div style="color: #666; font-size: 0.8em;">Empty</div>';
+                    }
+                    
+                    const ghostLabel = isVisible ? '' : '<span class="ghost-label">(Memory)</span>';
+                    
+                    li.innerHTML = `
+                        <div class="container-header">
+                            <span>${c.object_type || "Unknown Container"}${ghostLabel}</span>
+                            <span style="font-weight: normal; font-size: 0.8em; color: #888;">${c.items ? c.items.length : 0} items</span>
+                        </div>
+                        <div style="padding-left: 5px;">${itemsHtml}</div>
+                    `;
+                    cList.appendChild(li);
+                });
+            }
+            
+            // World Items
+            const wList = document.getElementById('worldItemList');
+            wList.innerHTML = ''; // Clear previous list
+            if (items.length === 0) {
+                wList.innerHTML = '<li style="color: #666; font-style: italic;">No items on ground</li>';
+            } else {
+                items.forEach(it => {
+                    const li = document.createElement('li');
+                    const isVisible = it.is_visible !== false;
+                    
+                    li.className = isVisible ? 'world-item' : 'world-item ghost';
+                    
+                    const ghostLabel = isVisible ? '' : '<span class="ghost-label">(Memory)</span>';
+
+                    li.innerHTML = `
+                        <div class="item-row" style="color: ${isVisible ? '#00FFFF' : '#888'};">
+                            <span>${it.name}${ghostLabel}</span>
+                            <span style="font-size: 0.8em; color: #aaa;">(${it.x}, ${it.y})</span>
+                        </div>
+                        <div style="font-size: 0.7em; color: #666;">${it.category || 'Unknown'}</div>
+                    `;
+                    wList.appendChild(li);
+                });
+            }
+        }
+
         // Color hashing for consistent room colors - MUST MATCH PYTHON
-        function stringToColor(str) {{
+        function stringToColor(str) {
             let hash = 0;
-            for (let i = 0; i < str.length; i++) {{
+            for (let i = 0; i < str.length; i++) {
                 hash = str.charCodeAt(i) + ((hash << 5) - hash);
-            }}
+            }
             let color = '#';
-            for (let i = 0; i < 3; i++) {{
+            for (let i = 0; i < 3; i++) {
                 let value = (hash >> (i * 8)) & 0xFF;
                 // Brighten semantics to distinguish from dark background
                 value = Math.min(255, value + 50); 
                 color += ('00' + value.toString(16)).substr(-2);
-            }}
+            }
             return color;
-        }}
+        }
         
-        function draw() {{
+        function toCanvas(x, y) {
+            return {
+                x: (x - bounds.min_x) * TILE_SIZE + PADDING,
+                y: (y - bounds.min_y) * TILE_SIZE + PADDING
+            };
+        }
+        
+        function draw() {
             ctx.clearRect(0, 0, width, height);
-            ctx.fillStyle = "rgba(30, 30, 30, 0.85)";
+            ctx.fillStyle = "rgba(30, 30, 30, 0.95)";
             ctx.fillRect(0, 0, width, height);
             
-            tiles.forEach(t => {{
+            // Draw Tiles
+            tiles.forEach(t => {
                 // Transform world coords to canvas coords
-                const cx = (t.x - bounds.min_x) * TILE_SIZE + PADDING;
-                const cy = (t.y - bounds.min_y) * TILE_SIZE + PADDING;
+                const pos = toCanvas(t.x, t.y);
+                const cx = pos.x;
+                const cy = pos.y;
                 
                 // Priority: Room > Tree > Layer > Default
-                if (t.room) {{
+                if (t.room) {
                     ctx.fillStyle = stringToColor(t.room);
-                }} else if (t.layer === "Tree") {{
+                } else if (t.layer === "Tree") {
                     ctx.fillStyle = "#1B5E20"; // Dark Forest Green
-                }} else if (t.layer === "Vegetation") {{
+                } else if (t.layer === "Vegetation") {
                     ctx.fillStyle = "#2E7D32"; // Green
-                }} else if (t.layer === "Street") {{
+                } else if (t.layer === "Street") {
                     ctx.fillStyle = "#555"; // Asphalt
-                }} else if (t.layer === "Floor") {{
+                } else if (t.layer === "Floor") {
                     ctx.fillStyle = "#795548"; // Brown
-                }} else if (t.layer === "FenceHigh") {{
+                } else if (t.layer === "FenceHigh") {
                     ctx.fillStyle = "#FF9800"; // Orange (High / Climb)
-                }} else if (t.layer === "FenceLow") {{
+                } else if (t.layer === "FenceLow") {
                     ctx.fillStyle = "#00BCD4"; // Cyan (High Contrast vs Orange)
-                }} else if (t.layer === "Wall") {{
+                } else if (t.layer === "Wall") {
                     ctx.fillStyle = "#B71C1C"; // Red (Solid Wall)
-                }} else {{
+                } else {
                     ctx.fillStyle = "#4CAF50"; // Default Green (Grass/Unknown)
-                }}
+                }
                 
                 ctx.fillRect(cx, cy, TILE_SIZE - 1, TILE_SIZE - 1);
-            }});
-        }}
+            });
+            
+            // Draw Containers
+            containers.forEach(c => {
+                const pos = toCanvas(c.x, c.y);
+                const isVisible = c.is_visible !== false;
+                
+                ctx.fillStyle = isVisible ? "#FFD700" : "#666666"; // Gold vs Grey
+                if (!isVisible) ctx.strokeStyle = "#444";
+                
+                ctx.beginPath();
+                ctx.arc(pos.x + TILE_SIZE/2, pos.y + TILE_SIZE/2, TILE_SIZE/3, 0, 2 * Math.PI);
+                ctx.fill();
+                ctx.strokeStyle = "black";
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            });
+            
+            // Draw World Items
+            items.forEach(it => {
+                const pos = toCanvas(it.x, it.y);
+                const isVisible = it.is_visible !== false;
+                
+                ctx.fillStyle = isVisible ? "#00FFFF" : "#558888"; // Cyan vs Dim Cyan
+                
+                ctx.beginPath();
+                ctx.arc(pos.x + TILE_SIZE/2 + 2, pos.y + TILE_SIZE/2 + 2, TILE_SIZE/5, 0, 2 * Math.PI);
+                ctx.fill();
+            });
+        }
         
+        renderLists();
         draw();
     </script>
 </body>
 </html>
     """
+    
+    # Inject variables using .replace() for safety
+    html_content = html_template.replace("{{TILE_COUNT}}", str(len(tiles_out)))
+    html_content = html_content.replace("{{BOUNDS_TEXT}}", f"{bounds['min_x']},{bounds['min_y']} to {bounds['max_x']},{bounds['max_y']}")
+    html_content = html_content.replace("{{LEGEND_HTML}}", legend_html)
+    html_content = html_content.replace("{{CONTAINER_COUNT}}", str(len(nearby_containers)))
+    html_content = html_content.replace("{{ITEM_COUNT}}", str(len(world_items)))
+    html_content = html_content.replace("{{JSON_DATA}}", json_data)
+    html_content = html_content.replace("{{JSON_ITEMS}}", json_items)
+    html_content = html_content.replace("{{JSON_CONTAINERS}}", json_containers)
+    html_content = html_content.replace("{{JSON_BOUNDS}}", json_bounds)
     
     with open(output_path, "w") as f:
         f.write(html_content)
@@ -223,7 +389,11 @@ if __name__ == "__main__":
                         grid.min_y = bounds["min_y"]
                         grid.max_y = bounds["max_y"]
                         
-                        path = generate_html_map(grid)
+                        # Extract Items & Containers
+                        world_items = data.get("world_items", [])
+                        nearby_containers = data.get("nearby_containers", [])
+                        
+                        path = generate_html_map(grid, world_items=world_items, nearby_containers=nearby_containers)
                         print(f"Map updated: {path}")
                         
                         if not browser_opened:

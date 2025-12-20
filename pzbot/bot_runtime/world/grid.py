@@ -109,7 +109,7 @@ class SpatialGrid:
             if t.room == room_name
         ]
 
-    def save_snapshot(self, path: str):
+    def save_snapshot(self, path: str, world_items: List = None, nearby_containers: List = None):
         """Serializes the current grid state to a JSON file."""
         data = {
             "bounds": {
@@ -118,7 +118,9 @@ class SpatialGrid:
                 "min_y": self.min_y if self.min_y != float('inf') else 0,
                 "max_y": self.max_y if self.max_y != float('-inf') else 0,
             },
-            "tiles": []
+            "tiles": [],
+            "world_items": world_items or [],
+            "nearby_containers": nearby_containers or []
         }
         
         for tile in self._grid.values():
@@ -127,6 +129,6 @@ class SpatialGrid:
         try:
             with open(path, "w") as f:
                 json.dump(data, f)
-            logger.info(f"Grid snapshot saved to {path} ({len(self._grid)} tiles)")
+            logger.info(f"Grid snapshot saved to {path} ({len(self._grid)} tiles, {len(data['world_items'])} items, {len(data['nearby_containers'])} containers)")
         except Exception as e:
             logger.error(f"Failed to save grid snapshot: {e}")

@@ -314,7 +314,177 @@ function Sensor.scan(player, gridRadius)
         end
     end
 
-    -- print(TAG .. "Scan Complete. Objects: " .. #vision.objects .. " | Tiles: " .. #vision.tiles)
+    -- 4. WORLD ITEMS (Items on floor)
+    vision.world_items = {}
+    -- Scan local area for WorldInventoryItems (Radius ~10 similar to visual range)
+    -- Using a slightly smaller radius for items to avoid noise
+    local ITEM_SCAN_RADIUS = 10
+    local worldItems = getCell():getObjectList() -- This gets moving objects including WorldInventoryItems
+    if worldItems then
+        for i=0, worldItems:size()-1 do
+            local obj = worldItems:get(i)
+            if instanceof(obj, "IsoWorldInventoryObject") then
+                local dx = obj:getX() - px
+                local dy = obj:getY() - py
+                local dist = math.sqrt(dx*dx + dy*dy)
+                
+                if dist <= ITEM_SCAN_RADIUS then
+                    local item = obj:getItem()
+                    if item then
+                        table.insert(vision.world_items, {
+                            id = tostring(obj:getID()), -- Unique ID of the world object
+                            x = math.floor(obj:getX()),
+                            y = math.floor(obj:getY()),
+                            z = math.floor(obj:getZ()),
+                            type = item:getFullType(),
+                            name = item:getName(),
+                            category = tostring(item:getCategory()),
+                            count = 1 -- World objects are usually 1 item, unless it's a stack (which is separate objects usually)
+                        })
+                    end
+                end
+            end
+        end
+    end
+
+    -- 5. NEARBY CONTAINERS (Lootable)
+    -- Try to get exactly what the player sees via the Loot Window
+    vision.nearby_containers = {}
+    local lootWindow = nil
+    
+    -- Safety check for global getPlayerLoot function (it's part of ISUI)
+    if getPlayerLoot then
+        lootWindow = getPlayerLoot(playerIndex)
+    end
+
+    if lootWindow and lootWindow.inventoryPane and lootWindow.inventoryPane.inventoryPage and lootWindow.inventoryPane.inventoryPage.backpacks then
+        local backpacks = lootWindow.inventoryPane.inventoryPage.backpacks
+        for i, containerObj in ipairs(backpacks) do
+            local inventory = nil
+            -- Detect how to get inventory based on object type
+            -- Case 1: ISButton (UI Element) wrapping the container
+            if containerObj.inventory then
+                 inventory = containerObj.inventory
+            -- Case 2: Object with getInventory() method (Player, etc.)
+            elseif containerObj.getInventory then
+                 inventory = containerObj:getInventory()
+            -- Case 3: Object with getContainer() method (IsoObject, etc.)
+            elseif containerObj.getContainer then
+                 local c = containerObj:getContainer()
+                 if c then inventory = c end
+            end
+            
+            -- If still nil, maybe it's the inventory itself? (Some mods do this)
+            if not inventory and instanceof(containerObj, "ItemContainer") then
+                inventory = containerObj
+            end
+            
+            if inventory then
+                -- Resolving the actual World Object
+                local targetObject = inventory:getParent() 
+                if not targetObject then
+                     -- Fallback using containerObj if it matches expectation, otherwise default to player?
+                     -- If it's an ISButton, it won't be an IsoObject.
+                     -- Use containerObj if it has getX, otherwise nil
+                     if containerObj.getX then targetObject = containerObj end
+                end
+
+                if targetObject then
+                    -- print(TAG .. "Found Inventory at index " .. i .. " Items: " .. inventory:getItems():size())
+                    local xVal, yVal, zVal = 0, 0, 0
+                    if targetObject.getX then xVal = math.floor(targetObject:getX()) end
+                    if targetObject.getY then yVal = math.floor(targetObject:getY()) end
+                    if targetObject.getZ then zVal = math.floor(targetObject:getZ()) end
+                    
+                    local cData = {
+                        type = "Container",
+                        object_type = "Unknown",
+                        x = xVal,
+                        y = yVal,
+                        z = zVal,
+                        items = {}
+                    }
+                    
+                    -- Determine type name
+                    local function getContainerName(obj)
+                        -- Try to get real name if possible (some objects have localization)
+                        if obj.getContainer and obj:getContainer() and obj:getContainer():getType() then
+                            -- return obj:getContainer():getType() -- often just "crate" or "bin"
+                        end
+                        
+                        local spriteName = nil
+                        if obj:getSprite() and obj:getSprite():getName() then
+                            spriteName = obj:getSprite():getName()
+                        end
+                        
+                        if spriteName then
+                             -- Simple cleanup for standard sprites
+                             -- e.g. "furniture_storage_01_46" -> "Furniture Storage"
+                             local clean = spriteName
+                             clean = string.gsub(clean, "%d", "")     -- Remove numbers
+                             clean = string.gsub(clean, "_", " ")     -- Replace underscores
+                             clean = string.gsub(clean, "^%s*(.-)%s*$", "%1") -- Trim
+                             
+                             -- Mappings for common prefixes
+                             if string.find(spriteName, "appliances_refrigeration") then return "Fridge" end
+                             if string.find(spriteName, "appliances_cooking") then return "Oven" end
+                             if string.find(spriteName, "furniture_storage") then return "Shelf" end
+                             if string.find(spriteName, "furniture_shelving") then return "Bookshelf" end
+                             if string.find(spriteName, "furniture_tables") then return "Table" end
+                             if string.find(spriteName, "counters") then return "Counter" end
+                             
+                             return clean
+                        end
+                        
+                        if obj.getObjectName and obj:getObjectName() then
+                            return obj:getObjectName()
+                        end
+                        
+                        return "Container"
+                    end
+                    
+                    if instanceof(targetObject, "IsoObject") then
+                        cData.object_type = getContainerName(targetObject)
+                    elseif instanceof(targetObject, "IsoZombie") then
+                         cData.object_type = "ZombieCorpse"
+                    elseif instanceof(targetObject, "IsoDeadBody") then
+                         cData.object_type = "Corpse"
+                    end
+                    
+                    -- Get Items (Simplified)
+                    local items = inventory:getItems()
+                    for j=0, items:size()-1 do
+                        local it = items:get(j)
+                        table.insert(cData.items, {
+                            type = it:getFullType(),
+                            name = it:getName(),
+                            count = 1 -- Simplified for now, not stacking
+                        })
+                    end
+                    
+                    table.insert(vision.nearby_containers, cData)
+                end
+            end
+        end
+    else
+        -- Fallback: Scan explicit 3x3 for containers (if UI not ready)
+        local range = 1
+        for x = px-range, px+range do
+            for y = py-range, py+range do
+                local sq = getSquare(x, y, pz)
+                if sq then
+                    local objs = sq:getObjects()
+                    for k=0, objs:size()-1 do
+                        local o = objs:get(k)
+                        if o:getContainer() then
+                             -- Add to list... (Simplified for brevity, assuming UI works mostly)
+                        end
+                    end
+                end
+            end
+        end
+    end
+
     return vision
 end
 

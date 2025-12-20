@@ -114,6 +114,7 @@ class Tile(LogExtraFieldsBase):
     z: int
     room: Optional[str] = None
     layer: Optional[str] = None
+    is_walkable: bool = Field(default=True, alias='w')
 
 class WorldObject(LogExtraFieldsBase):
     id: str
@@ -140,15 +141,49 @@ class Neighbor(LogExtraFieldsBase):
             return list(v.values())
         return v
 
+class WorldItem(LogExtraFieldsBase):
+    id: str
+    type: str
+    name: str
+    category: str
+    x: int
+    y: int
+    z: int
+    count: int = 1
+
+class ContainerItem(LogExtraFieldsBase):
+    type: str
+    name: str
+    count: int = 1
+
+class Container(LogExtraFieldsBase):
+    type: str = "Container"
+    object_type: str = "Unknown"
+    x: int
+    y: int
+    z: int
+    items: List[ContainerItem] = Field(default_factory=list)
+
+    @field_validator('items', mode='before')
+    @classmethod
+    def allow_empty_dict_as_list(cls, v):
+        if isinstance(v, dict) and not v:
+            return []
+        if isinstance(v, dict):
+            return list(v.values())
+        return v
+
 class Vision(LogExtraFieldsBase):
     scan_radius: int = 0
     timestamp: int = 0
     tiles: List[Tile] = Field(default_factory=list)
     objects: List[WorldObject] = Field(default_factory=list)
+    world_items: List[WorldItem] = Field(default_factory=list)
+    nearby_containers: List[Container] = Field(default_factory=list)
     neighbors: Dict[str, Neighbor] = Field(default_factory=dict)
     debug_z: Optional[Dict[str, Any]] = None
 
-    @field_validator('tiles', 'objects', mode='before')
+    @field_validator('tiles', 'objects', 'world_items', 'nearby_containers', mode='before')
     @classmethod
     def allow_empty_dict_as_list(cls, v):
         if isinstance(v, dict) and not v:

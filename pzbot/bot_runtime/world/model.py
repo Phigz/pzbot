@@ -38,7 +38,11 @@ class WorldModel(WorldView):
                 self.grid.update(vision.tiles)
                 
             # Update Entities
-            self.entities.process_vision(vision.objects)
+            self.entities.process_vision(
+                visible_objects=vision.objects,
+                world_items=vision.world_items, # New: Persistent Items
+                containers=vision.nearby_containers # New: Persistent Containers
+            )
 
             
     @property
