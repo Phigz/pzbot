@@ -26,13 +26,46 @@ The system consists of two main components operating in a loop:
 - **Navigation**: Plans paths using A* on the internal grid.
 - **Control**: Manages the action queue and ensures smooth execution.
 
-### 2.3. Data Flow Diagram
+### 2.3. Data Flow Architecture
+
+We model the system as a decoupled loop where data flows up from the game to the brain (Perception), and commands flow down from the brain to the game (Control).
+
+#### 2.3.1. Incoming Data (Perception Pipeline)
+The "Incoming" flow is responsible for turning raw, high-frequency game scans into a stable, queryable memory.
+
 ```
-- Lua[PZ Mod (Lua)] -->|Writes state.json| Ingest[Observation Ingest]
-- Ingest -->|Normalizes| Model[World Model]
-- Model -->|Belief State| Plan[Planner/Controller]
-- Plan -->|Generates Actions| Queue[Action Queue]
-- Queue -->|Writes input.json| Lua
+[Lua Mod] --(Scans Env)--> [state.json] --(File IO)--> [Python Ingest]
+                                                          |
+                                                      (Raw Dict)
+                                                          v
+                                                  [World Model]
+                                                    /       \
+                                            (Updates)       (Updates)
+                                                v               v
+                                         [Spatial Grid]   [Entity Tracker]
+                                                \               /
+                                            (Abstracted State)
+                                                    v
+                                             [Planning Layer]
+```
+
+#### 2.3.2. Outgoing Data (Action Pipeline)
+The "Outgoing" flow translates high-level intents (e.g., "Loot House") into specific, frame-perfect game API calls.
+
+```
+[Planning Layer] --(Decision)--> [Action Controller]
+                                        |
+                                 (Atomic Commands)
+                                        v
+                                 [Command Queue]
+                                        |
+                                  (Serialization)
+                                        v
+                                   [input.json]
+                                        |
+                                    (File IO)
+                                        v
+                                    [Lua Mod] --(Game API)--> [Execute Action]
 ```
 
 ---
@@ -151,7 +184,7 @@ The mod writes perception data to `state.json`.
 
 ## 5. Roadmap
 
-### Phase 1: Foundation (TODO)
+### Phase 1: Foundation (DONE)
 - [x] **Bi-directional Communication**: Lua ↔ Python bridge.
 - [x] **State Perception**: Reading health, stats, nearby zombies.
 - [x] **World Modeling**: Persistent grid memory and entity tracking.
