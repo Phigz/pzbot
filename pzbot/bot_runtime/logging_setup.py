@@ -9,9 +9,12 @@ def setup_logging():
     """Configures logging for the application."""
     
     # Archive previous log if it exists
+    # Ensure directory exists
+    log_dir = config.LOG_FILE_PATH.parent
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    # Archive previous log if it exists
     if config.LOG_FILE_PATH.exists():
-        log_dir = config.LOG_FILE_PATH.parent
-        log_dir.mkdir(exist_ok=True)
         
         timestamp = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M")
         archive_name = f"{timestamp}_{config.LOG_FILE_PATH.name}"

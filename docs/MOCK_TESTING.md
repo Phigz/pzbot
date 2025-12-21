@@ -29,8 +29,7 @@ This simulates the game engine, zombies, and environment.
 This runs the actual bot logic (pathfinding, decision making).
 
 ```bash
-source venv/bin/activate
-python3 -m pzbot.bot_runtime.main
+./pzbot/tools/mock_bridge/run_mock_brain.sh
 ```
 
 ### Terminal 3: The Eyes (Visualizer)

@@ -17,7 +17,7 @@ def main():
     parser = argparse.ArgumentParser(description="Mock Project Zomboid Lua Bridge")
     parser.add_argument("--dir", type=str, default=".", help="Directory to write state.json/read input.json")
     parser.add_argument("--fps", type=int, default=10, help="Target ticks per second")
-    parser.add_argument("--scenario", type=str, choices=["empty", "basic", "surrounded"], default="empty", help="Load a pre-set scenario")
+    parser.add_argument("--scenario", type=str, choices=["empty", "basic", "surrounded", "kitchen"], default="empty", help="Load a pre-set scenario")
     args = parser.parse_args()
 
     data_dir = Path(args.dir).resolve()
@@ -39,11 +39,17 @@ def main():
         sys.exit(1)
 
     target_dt = 1.0 / args.fps
+    frame_count = 0
     
     try:
         while True:
-            start_time = time.time()
+            cycle_start = time.time()
             
+            # Check scenario end condition
+            if sim.is_finished():
+                logger.info("Scenario finished. Exiting.")
+                break
+
             # 1. Read Input (Stubbed for now as requested)
             commands = io.read_input()
             if commands:
@@ -58,8 +64,12 @@ def main():
             snapshot = sim.get_state_snapshot()
             io.write_state(snapshot)
             
+            frame_count += 1
+            if frame_count % (args.fps * 2) == 0: # Log every 2 seconds roughly
+                logger.info(f"Simulating... Tick: {snapshot.get('tick', 0)} | Timestamp: {snapshot.get('timestamp', 0)}")
+            
             # 4. Sleep
-            elapsed = time.time() - start_time
+            elapsed = time.time() - cycle_start
             sleep_time = max(0, target_dt - elapsed)
             time.sleep(sleep_time)
             

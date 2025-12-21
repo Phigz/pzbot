@@ -1,30 +1,44 @@
-def scenario_empty_room(world):
-    """
-    Standard empty room for testing navigation.
-    """
-    world.set_player_pos(100, 100)
-    # No zombies
+import importlib
+import pkgutil
+import logging
+from pathlib import Path
 
-def scenario_basic_zombies(world):
-    """
-    Two stationary zombies nearby to test vision/combat.
-    """
-    world.set_player_pos(100, 100)
-    world.add_zombie(105, 100, "z1")
-    world.add_zombie(100, 105, "z2")
+# Dynamic Scenario Loader
+# Scans pzbot/tools/mock_bridge/tests/ for .py files and loads them.
 
-def scenario_surrounded(world):
-    """
-    Testing fleeing logic.
-    """
-    world.set_player_pos(100, 100)
-    world.add_zombie(102, 100, "n")
-    world.add_zombie(98, 100, "s")
-    world.add_zombie(100, 102, "e")
-    world.add_zombie(100, 98, "w")
+logger = logging.getLogger("MockBridge")
 
-SCENARIO_MAP = {
-    "empty": scenario_empty_room,
-    "basic": scenario_basic_zombies,
-    "surrounded": scenario_surrounded
-}
+SCENARIO_MAP = {}
+
+def load_scenarios():
+    """
+    Dynamically loads scenarios from the 'pzbot.tools.mock_bridge.tests' package.
+    Expects modules to have a function `run(world)`.
+    """
+    tests_package = "pzbot.tools.mock_bridge.tests"
+    tests_dir = Path(__file__).parent / "tests"
+    
+    if not tests_dir.exists():
+        logger.warning(f"Tests directory not found: {tests_dir}")
+        return
+
+    # Iterate over files in the tests directory
+    for file_path in tests_dir.glob("*.py"):
+        if file_path.name == "__init__.py":
+            continue
+            
+        module_name = f"{tests_package}.{file_path.stem}"
+        scenario_name = file_path.stem
+        
+        try:
+            module = importlib.import_module(module_name)
+            if hasattr(module, "run") and callable(module.run):
+                SCENARIO_MAP[scenario_name] = module.run
+                logger.debug(f"Registered scenario: {scenario_name}")
+            else:
+                logger.debug(f"Skipping {scenario_name}: No run() function found.")
+        except Exception as e:
+            logger.error(f"Failed to load scenario {scenario_name}: {e}")
+
+# Load scenarios on import
+load_scenarios()

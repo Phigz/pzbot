@@ -31,10 +31,14 @@ class LogExtraFieldsBase(BaseModel):
     def check_for_extra_fields(cls, data: Any) -> Any:
         if isinstance(data, dict):
             # Check for keys in data that are not in the model fields
-            # We need to handle aliases if they exist, but for now we assume field names match
-            # Also need to consider that data might be a subset if fields are optional
+            # We need to handle aliases if they exist
             
-            allowed_keys = set(cls.model_fields.keys())
+            allowed_keys = set()
+            for name, field in cls.model_fields.items():
+                allowed_keys.add(name)
+                if field.alias:
+                    allowed_keys.add(field.alias)
+
             input_keys = set(data.keys())
             extra_keys = input_keys - allowed_keys
             
@@ -199,9 +203,15 @@ class ActionState(LogExtraFieldsBase):
     current_action_id: Optional[str] = None
     current_action_type: Optional[str] = None
 
+class Vitals(LogExtraFieldsBase):
+    health: float = 0.0
+    stamina: float = 0.0
+    hunger: float = 0.0
+    panic: float = 0.0
+
 class Player(LogExtraFieldsBase):
     status: str
-    # vitals: Vitals # Removed
+    vitals: Optional[Vitals] = None
     position: Position
     state: PlayerStateFlags
     rotation: float
@@ -210,8 +220,30 @@ class Player(LogExtraFieldsBase):
     inventory: Inventory
     vision: Vision = Field(default_factory=Vision)
     action_state: ActionState = Field(default_factory=ActionState)
+    
+    # Extra schema fields
+    equipped: Optional[Dict[str, Any]] = None
+    attached: Optional[Dict[str, Any]] = None
+    traits: List[str] = Field(default_factory=list)
+    skills: Optional[Dict[str, Any]] = None
+    profession: Optional[str] = None
+    active_action_id: Optional[str] = None
+
+class Environment(LogExtraFieldsBase):
+    nearby_containers: List[Container] = Field(default_factory=list)
+
+    @field_validator('nearby_containers', mode='before')
+    @classmethod
+    def allow_empty_dict_as_list(cls, v):
+        if isinstance(v, dict) and not v:
+            return []
+        if isinstance(v, dict):
+            return list(v.values())
+        return v
 
 class GameState(LogExtraFieldsBase):
     timestamp: int
     tick: float
     player: Player
+    environment: Environment = Field(default_factory=Environment)
+    events: List[Any] = Field(default_factory=list)

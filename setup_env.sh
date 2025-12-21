@@ -22,4 +22,4 @@ echo "[SETUP] Installing dependencies from requirements.txt..."
 
 echo "[SETUP] Done! You can now use the helper scripts:"
 echo "  Run Mock Bridge: ./pzbot/tools/mock_bridge/run_mock.sh"
-echo "  Run Bot Runtime: source venv/bin/activate && python3 -m pzbot.bot_runtime.main"
+echo "  Run Bot Runtime: ./pzbot/tools/mock_bridge/run_mock_brain.sh"

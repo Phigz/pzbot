@@ -10,6 +10,7 @@
 !/README.md
 !/requirements.txt
 !/setup_env.sh
+!/pzbot/tools/mock_bridge/run_mock_brain.sh
 !/.gitignore
 
 # Ignore certain pzbot files

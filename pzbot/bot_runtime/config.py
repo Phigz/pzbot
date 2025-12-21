@@ -36,6 +36,15 @@ def load_settings() -> BotConfig:
         except Exception as e:
             print(f"Error loading config.yaml: {e}")
             
+    # Manually load environment variables (Pydantic V2 BaseModel doesn't do this automatically without BaseSettings)
+    # We iterate over the model fields and check if PZBOT_<FIELD_NAME> exists in os.environ
+    for field_name in BotConfig.model_fields.keys():
+        env_var_name = f"PZBOT_{field_name}"
+        if env_var_name in os.environ:
+            val = os.environ[env_var_name]
+            config_data[field_name] = val
+            print(f"Config Override: {field_name} set to {val} from env var")
+
     return BotConfig(**config_data)
 
 # Global Config Instance
