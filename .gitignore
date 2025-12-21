@@ -8,6 +8,8 @@
 !/mods
 !/docs
 !/README.md
+!/requirements.txt
+!/setup_env.sh
 !/.gitignore
 
 # Ignore certain pzbot files

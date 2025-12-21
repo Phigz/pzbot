@@ -30,16 +30,16 @@ Utilities to streamline the development and testing loop.
 
 ---
 
-## � Usage
+## 📦 Setup & Usage
 
 **To run the bot in a simulated environment (Mock Bridge):**
 1.  **Launch the Mock Bridge:**
     ```bash
-    # Standard mode (Empty room)
+    # Standard mode (Empty room) in venv
     python3 -m pzbot.tools.mock_bridge.main --dir ./data
     
-    # Scene mode (e.g., 2 zombies)
-    python3 -m pzbot.tools.mock_bridge.main --scenario basic --dir ./data
+    # Or using the helper script (Recommended):
+    ./pzbot/tools/mock_bridge/run_mock.sh --scenario basic
     ```
 2.  **Launch the Bot Brain:**
     ```bash

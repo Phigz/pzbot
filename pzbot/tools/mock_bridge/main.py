@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 
 # Fix path to include pzbot package if run directly
-sys.path.append(str(Path(__file__).parent.parent.parent))
+sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
 from pzbot.tools.mock_bridge.world_sim import MockWorld
 from pzbot.tools.mock_bridge.file_io import MockFileIO
