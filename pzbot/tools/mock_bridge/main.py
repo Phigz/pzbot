@@ -19,6 +19,7 @@ def main():
     parser.add_argument("--dir", type=str, default=".", help="Directory to write state.json/read input.json")
     parser.add_argument("--fps", type=int, default=10, help="Target ticks per second")
     parser.add_argument("--scenario", type=str, choices=list(SCENARIO_MAP.keys()), default="empty", help="Load a pre-set scenario")
+    parser.add_argument("--replay", type=str, default=None, help="Path to a recording file to replay (overrides scenario)")
     args = parser.parse_args()
 
     data_dir = Path(args.dir).resolve()
@@ -29,8 +30,18 @@ def main():
         io = MockFileIO(data_dir)
         sim = MockWorld()
         
-        # Load Scenario
-        if args.scenario in SCENARIO_MAP:
+        # Load Replay or Scenario
+        if args.replay:
+            if "replay" not in SCENARIO_MAP:
+                logger.error("Replay scenario logic not found in tests/replay.py")
+                sys.exit(1)
+            
+            # Inject path for the replayer
+            sim.replay_file = args.replay
+            SCENARIO_MAP["replay"](sim)
+            logger.info(f"Loaded REPLAY from: {args.replay}")
+            
+        elif args.scenario in SCENARIO_MAP:
              SCENARIO_MAP[args.scenario](sim)
              logger.info(f"Loaded scenario: {args.scenario}")
              
