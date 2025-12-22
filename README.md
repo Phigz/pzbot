@@ -32,28 +32,7 @@ Utilities to streamline the development and testing loop.
 
 ## 📦 Setup & Usage
 
-**To run the bot in a simulated environment (Mock Bridge):**
-1.  **Launch the Mock Bridge:**
-    ```bash
-    # Standard mode (Empty room) in venv
-    python3 -m pzbot.tools.mock_bridge.main --dir ./data
-    
-    # Or using the helper script (Recommended):
-    ./pzbot/tools/mock_bridge/run_mock.sh --scenario basic
-    ```
-2.  **Launch the Bot Brain:**
-    ```bash
-    python3 -m pzbot.bot_runtime.main
-    ```
-3.  **Visualize:**
-    ```bash
-    python3 -m pzbot.tools.visualize_grid
-    ```
-
-**To run the test suite:**
-```bash
-python3 -m pytest pzbot/tools/mock_bridge/tests
-```
+**Heavy WIP, use at your own risk**
 
 ---
 
