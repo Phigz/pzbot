@@ -35,7 +35,7 @@ def main():
 
     # Snapshot settings
     last_snapshot_time = 0.0
-    SNAPSHOT_INTERVAL = 0.5 # seconds (Speedy updates for visualization)
+    SNAPSHOT_INTERVAL = 0.5 # seconds
     snapshot_path = config.BASE_DIR / "tools" / "grid_snapshot.json"
 
     # Cleanup previous runtime data
