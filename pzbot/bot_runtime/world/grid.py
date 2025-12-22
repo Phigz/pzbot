@@ -127,8 +127,13 @@ class SpatialGrid:
             data["tiles"].append(asdict(tile))
             
         try:
-            with open(path, "w") as f:
+            # Atomic write: Write to .tmp then rename
+            temp_path = str(path) + ".tmp"
+            with open(temp_path, "w") as f:
                 json.dump(data, f)
+            
+            import os
+            os.replace(temp_path, path)
             logger.info(f"Grid snapshot saved to {path} ({len(self._grid)} tiles, {len(data['world_items'])} items, {len(data['nearby_containers'])} containers)")
         except Exception as e:
             logger.error(f"Failed to save grid snapshot: {e}")

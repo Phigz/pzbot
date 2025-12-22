@@ -9,6 +9,7 @@ sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
 from pzbot.tools.mock_bridge.world_sim import MockWorld
 from pzbot.tools.mock_bridge.file_io import MockFileIO
+from pzbot.tools.mock_bridge.scenarios import SCENARIO_MAP
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - [MOCK] - %(message)s')
 logger = logging.getLogger("MockBridge")
@@ -17,7 +18,7 @@ def main():
     parser = argparse.ArgumentParser(description="Mock Project Zomboid Lua Bridge")
     parser.add_argument("--dir", type=str, default=".", help="Directory to write state.json/read input.json")
     parser.add_argument("--fps", type=int, default=10, help="Target ticks per second")
-    parser.add_argument("--scenario", type=str, choices=["empty", "basic", "surrounded", "kitchen"], default="empty", help="Load a pre-set scenario")
+    parser.add_argument("--scenario", type=str, choices=list(SCENARIO_MAP.keys()), default="empty", help="Load a pre-set scenario")
     args = parser.parse_args()
 
     data_dir = Path(args.dir).resolve()
@@ -29,7 +30,6 @@ def main():
         sim = MockWorld()
         
         # Load Scenario
-        from pzbot.tools.mock_bridge.scenarios import SCENARIO_MAP
         if args.scenario in SCENARIO_MAP:
              SCENARIO_MAP[args.scenario](sim)
              logger.info(f"Loaded scenario: {args.scenario}")

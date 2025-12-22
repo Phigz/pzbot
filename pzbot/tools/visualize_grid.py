@@ -24,23 +24,25 @@ def generate_html_map(grid: SpatialGrid, output_path=None, world_items=None, nea
     # Collect unique rooms/layers for legend
     unique_rooms = set()
     unique_layers = set()
+    bounds = {"min_x": 0, "max_x": 0, "min_y": 0, "max_y": 0} # Default empty bounds
     
     tiles_out = []
-    for coord, tile in grid._grid.items():
-        t_out = {
-            "x": tile.x,
-            "y": tile.y,
-            "z": tile.z,
-            "val": 1,
-            "room": getattr(tile, "room", None),
-            "layer": getattr(tile, "layer", None)
-        }
-        tiles_out.append(t_out)
-        
-        if t_out["room"]:
-            unique_rooms.add(t_out["room"])
-        if t_out["layer"]:
-            unique_layers.add(t_out["layer"])
+    if grid:
+        for coord, tile in grid._grid.items():
+            t_out = {
+                "x": tile.x,
+                "y": tile.y,
+                "z": tile.z,
+                "val": 1,
+                "room": getattr(tile, "room", None),
+                "layer": getattr(tile, "layer", None)
+            }
+            tiles_out.append(t_out)
+            
+            if t_out["room"]:
+                unique_rooms.add(t_out["room"])
+            if t_out["layer"]:
+                unique_layers.add(t_out["layer"])
     
     # Generate Legend HTML dynamically
     legend_html = ''
@@ -87,15 +89,7 @@ def generate_html_map(grid: SpatialGrid, output_path=None, world_items=None, nea
 <html>
 <head>
     <title>PZBot Map Visualizer</title>
-    <!-- Auto-refresh every 3 seconds -->
-    <meta http-equiv="refresh" content="3">
     <style>
-        body {{ background: #111; color: #eee; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; }}
-        h1 {{ margin: 0 0 10px 0; }}
-        canvas {{ border: 1px solid #444; background: #222; image-rendering: pixelated; }}
-        #container {{ display: flex; gap: 20px; align-items: flex-start; }}
-        #mapColumn {{ display: flex; flex-direction: column; align-items: center; }}
-        #sidebar {{ width: 300px; background: #222; padding: 15px; border-radius: 8px; border: 1px solid #444; max-height: 80vh; overflow-y: auto; }}
         body { background: #111; color: #eee; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; }
         h1 { margin: 0 0 10px 0; }
         canvas { border: 1px solid #444; background: #222; image-rendering: pixelated; }
@@ -132,68 +126,109 @@ def generate_html_map(grid: SpatialGrid, output_path=None, world_items=None, nea
     
     <div id="container">
         <div id="mapColumn">
-            <div id="info">Tiles: {{TILE_COUNT}} | Bounds: {{BOUNDS_TEXT}}</div>
-            <div class="legend">
-                {{LEGEND_HTML}}
-            </div>
+            <div id="info">Waiting for data...</div>
             <div id="status" style="font-size: 0.8em; color: #888; margin-bottom: 5px;">Live Updating...</div>
             <canvas id="mapCanvas"></canvas>
+            <div class="legend" id="legendContainer">
+                <!-- Static Legend Items -->
+                <div class="legend-item"><div class="box" style="background: #555"></div> Street</div>
+                <div class="legend-item"><div class="box" style="background: #2E7D32"></div> Vegetation</div>
+                <div class="legend-item"><div class="box" style="background: #1B5E20"></div> Tree</div>
+                <div class="legend-item"><div class="box" style="background: #FF9800"></div> High Fence</div>
+                <div class="legend-item"><div class="box" style="background: #00BCD4; color: #333"></div> Low Fence</div>
+                <div class="legend-item"><div class="box" style="background: #B71C1C"></div> Wall</div>
+                <div class="legend-item"><div class="box" style="background: #795548"></div> Floor</div>
+                <div class="legend-item"><div class="box" style="background: #4CAF50"></div> Default</div>
+                <div class="legend-item"><div class="box" style="background: #FFD700; border-radius: 50%"></div> Container</div>
+                <div class="legend-item"><div class="box" style="background: #00FFFF; border-radius: 50%; width: 6px; height: 6px;"></div> Item</div>
+            </div>
         </div>
         
         <div id="sidebar">
-            <h2>Nearby Containers ({{CONTAINER_COUNT}})</h2>
-            <ul id="containerList">
-                <!-- Populated by JS -->
-            </ul>
+            <h2>Nearby Containers (<span id="containerCount">0</span>)</h2>
+            <ul id="containerList"></ul>
             
-            <h2 style="margin-top: 20px;">World Items ({{ITEM_COUNT}})</h2>
-            <ul id="worldItemList">
-                <!-- Populated by JS -->
-            </ul>
+            <h2 style="margin-top: 20px;">World Items (<span id="itemCount">0</span>)</h2>
+            <ul id="worldItemList"></ul>
         </div>
     </div>
 
     <script>
-        const tiles = {{JSON_DATA}};
-        const items = {{JSON_ITEMS}};
-        const containers = {{JSON_CONTAINERS}};
-        const bounds = {{JSON_BOUNDS}};
-        
         const canvas = document.getElementById('mapCanvas');
         const ctx = canvas.getContext('2d');
-        
-        const TILE_SIZE = 12; // Slightly larger
+        const TILE_SIZE = 12;
         const PADDING = 20;
         
-        const width = (bounds.max_x - bounds.min_x + 1) * TILE_SIZE + (PADDING * 2);
-        const height = (bounds.max_y - bounds.min_y + 1) * TILE_SIZE + (PADDING * 2);
-        
-        canvas.width = width;
-        canvas.height = height;
-        
-        // --- RENDER LISTS ---
-        function renderLists() {
-            // Containers
+        let lastUpdate = 0;
+
+        function stringToColor(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            let color = '#';
+            for (let i = 0; i < 3; i++) {
+                let value = (hash >> (i * 8)) & 0xFF;
+                value = Math.min(255, value + 50); 
+                color += ('00' + value.toString(16)).substr(-2);
+            }
+            return color;
+        }
+
+        async function fetchData() {
+            try {
+                // Fetch header to check if modified
+                const response = await fetch('grid_data.json', { cache: "no-cache" });
+                if (!response.ok) throw new Error("Network response was not ok");
+                
+                const data = await response.json();
+                
+                if (data.timestamp <= lastUpdate) return; // Skip if old data
+                lastUpdate = data.timestamp;
+
+                render(data);
+                
+            } catch (error) {
+                console.error("Fetch error:", error);
+            }
+        }
+
+        function render(data) {
+            const tiles = data.tiles;
+            const items = data.items;
+            const containers = data.containers;
+            const bounds = data.bounds;
+
+            // Resize Canvas
+            const width = (bounds.max_x - bounds.min_x + 1) * TILE_SIZE + (PADDING * 2);
+            const height = (bounds.max_y - bounds.min_y + 1) * TILE_SIZE + (PADDING * 2);
+            
+            if (canvas.width !== width || canvas.height !== height) {
+                canvas.width = width;
+                canvas.height = height;
+            }
+            
+            // Update Info
+            document.getElementById('info').textContent = `Tiles: ${tiles.length} | Bounds: ${bounds.min_x},${bounds.min_y} to ${bounds.max_x},${bounds.max_y}`;
+            document.getElementById('containerCount').textContent = containers.length;
+            document.getElementById('itemCount').textContent = items.length;
+
+            // --- RENDER SIDEBAR ---
             const cList = document.getElementById('containerList');
-            cList.innerHTML = ''; // Clear previous list
+            cList.innerHTML = '';
             if (containers.length === 0) {
                 cList.innerHTML = '<li style="color: #666; font-style: italic;">No containers in reach</li>';
             } else {
                 containers.forEach(c => {
                     const li = document.createElement('li');
-                    const isVisible = c.is_visible !== false; // Default true
-                    
+                    const isVisible = c.is_visible !== false;
                     if (!isVisible) li.className = 'ghost';
                     
-                    let itemsHtml = '';
-                    if (c.items && c.items.length > 0) {
-                        itemsHtml = c.items.map(it => `<div class="item-row"><span>${it.name}</span><span class="item-count">x${it.count}</span></div>`).join('');
-                    } else {
-                        itemsHtml = '<div style="color: #666; font-size: 0.8em;">Empty</div>';
-                    }
+                    let itemsHtml = (c.items && c.items.length > 0) 
+                        ? c.items.map(it => `<div class="item-row"><span>${it.name}</span><span class="item-count">x${it.count}</span></div>`).join('') 
+                        : '<div style="color: #666; font-size: 0.8em;">Empty</div>';
                     
                     const ghostLabel = isVisible ? '' : '<span class="ghost-label">(Memory)</span>';
-                    
                     li.innerHTML = `
                         <div class="container-header">
                             <span>${c.object_type || "Unknown Container"}${ghostLabel}</span>
@@ -204,21 +239,17 @@ def generate_html_map(grid: SpatialGrid, output_path=None, world_items=None, nea
                     cList.appendChild(li);
                 });
             }
-            
-            // World Items
+
             const wList = document.getElementById('worldItemList');
-            wList.innerHTML = ''; // Clear previous list
+            wList.innerHTML = '';
             if (items.length === 0) {
                 wList.innerHTML = '<li style="color: #666; font-style: italic;">No items on ground</li>';
             } else {
                 items.forEach(it => {
                     const li = document.createElement('li');
                     const isVisible = it.is_visible !== false;
-                    
                     li.className = isVisible ? 'world-item' : 'world-item ghost';
-                    
                     const ghostLabel = isVisible ? '' : '<span class="ghost-label">(Memory)</span>';
-
                     li.innerHTML = `
                         <div class="item-row" style="color: ${isVisible ? '#00FFFF' : '#888'};">
                             <span>${it.name}${ghostLabel}</span>
@@ -229,73 +260,42 @@ def generate_html_map(grid: SpatialGrid, output_path=None, world_items=None, nea
                     wList.appendChild(li);
                 });
             }
-        }
-
-        // Color hashing for consistent room colors - MUST MATCH PYTHON
-        function stringToColor(str) {
-            let hash = 0;
-            for (let i = 0; i < str.length; i++) {
-                hash = str.charCodeAt(i) + ((hash << 5) - hash);
-            }
-            let color = '#';
-            for (let i = 0; i < 3; i++) {
-                let value = (hash >> (i * 8)) & 0xFF;
-                // Brighten semantics to distinguish from dark background
-                value = Math.min(255, value + 50); 
-                color += ('00' + value.toString(16)).substr(-2);
-            }
-            return color;
-        }
-        
-        function toCanvas(x, y) {
-            return {
-                x: (x - bounds.min_x) * TILE_SIZE + PADDING,
-                y: (y - bounds.min_y) * TILE_SIZE + PADDING
-            };
-        }
-        
-        function draw() {
+            
+            // --- DRAW CANVAS ---
             ctx.clearRect(0, 0, width, height);
             ctx.fillStyle = "rgba(30, 30, 30, 0.95)";
             ctx.fillRect(0, 0, width, height);
-            
+
+            function toCanvas(x, y) {
+                return {
+                    x: (x - bounds.min_x) * TILE_SIZE + PADDING,
+                    y: (y - bounds.min_y) * TILE_SIZE + PADDING
+                };
+            }
+
             // Draw Tiles
             tiles.forEach(t => {
-                // Transform world coords to canvas coords
                 const pos = toCanvas(t.x, t.y);
-                const cx = pos.x;
-                const cy = pos.y;
                 
-                // Priority: Room > Tree > Layer > Default
-                if (t.room) {
-                    ctx.fillStyle = stringToColor(t.room);
-                } else if (t.layer === "Tree") {
-                    ctx.fillStyle = "#1B5E20"; // Dark Forest Green
-                } else if (t.layer === "Vegetation") {
-                    ctx.fillStyle = "#2E7D32"; // Green
-                } else if (t.layer === "Street") {
-                    ctx.fillStyle = "#555"; // Asphalt
-                } else if (t.layer === "Floor") {
-                    ctx.fillStyle = "#795548"; // Brown
-                } else if (t.layer === "FenceHigh") {
-                    ctx.fillStyle = "#FF9800"; // Orange (High / Climb)
-                } else if (t.layer === "FenceLow") {
-                    ctx.fillStyle = "#00BCD4"; // Cyan (High Contrast vs Orange)
-                } else if (t.layer === "Wall") {
-                    ctx.fillStyle = "#B71C1C"; // Red (Solid Wall)
-                } else {
-                    ctx.fillStyle = "#4CAF50"; // Default Green (Grass/Unknown)
-                }
+                if (t.room && t.room !== "outside") ctx.fillStyle = stringToColor(t.room);
+                else if (t.layer === "Tree") ctx.fillStyle = "#1B5E20";
+                else if (t.layer === "Vegetation") ctx.fillStyle = "#2E7D32";
+                else if (t.layer === "Street") ctx.fillStyle = "#555";
+                else if (t.layer === "Floor") ctx.fillStyle = "#795548";
+                else if (t.layer === "FenceHigh") ctx.fillStyle = "#FF9800";
+                else if (t.layer === "FenceLow") ctx.fillStyle = "#00BCD4";
+                else if (t.layer === "Wall") ctx.fillStyle = "#B71C1C";
+                else ctx.fillStyle = "#4CAF50";
                 
-                ctx.fillRect(cx, cy, TILE_SIZE - 1, TILE_SIZE - 1);
+                ctx.fillRect(pos.x, pos.y, TILE_SIZE - 1, TILE_SIZE - 1);
             });
-            
+
             // Draw Containers
             containers.forEach(c => {
                 const pos = toCanvas(c.x, c.y);
                 const isVisible = c.is_visible !== false;
                 
-                ctx.fillStyle = isVisible ? "#FFD700" : "#666666"; // Gold vs Grey
+                ctx.fillStyle = isVisible ? "#FFD700" : "#666666";
                 if (!isVisible) ctx.strokeStyle = "#444";
                 
                 ctx.beginPath();
@@ -305,78 +305,111 @@ def generate_html_map(grid: SpatialGrid, output_path=None, world_items=None, nea
                 ctx.lineWidth = 1;
                 ctx.stroke();
             });
-            
-            // Draw World Items
+
+            // Draw Items
             items.forEach(it => {
                 const pos = toCanvas(it.x, it.y);
                 const isVisible = it.is_visible !== false;
-                
-                ctx.fillStyle = isVisible ? "#00FFFF" : "#558888"; // Cyan vs Dim Cyan
-                
+                ctx.fillStyle = isVisible ? "#00FFFF" : "#558888";
                 ctx.beginPath();
                 ctx.arc(pos.x + TILE_SIZE/2 + 2, pos.y + TILE_SIZE/2 + 2, TILE_SIZE/5, 0, 2 * Math.PI);
                 ctx.fill();
             });
         }
-        
-        renderLists();
-        draw();
+
+        // Poll every 500ms
+        setInterval(fetchData, 500);
+        fetchData();
     </script>
 </body>
 </html>
     """
     
-    # Inject variables using .replace() for safety
-    html_content = html_template.replace("{{TILE_COUNT}}", str(len(tiles_out)))
-    html_content = html_content.replace("{{BOUNDS_TEXT}}", f"{bounds['min_x']},{bounds['min_y']} to {bounds['max_x']},{bounds['max_y']}")
-    html_content = html_content.replace("{{LEGEND_HTML}}", legend_html)
-    html_content = html_content.replace("{{CONTAINER_COUNT}}", str(len(nearby_containers)))
-    html_content = html_content.replace("{{ITEM_COUNT}}", str(len(world_items)))
-    html_content = html_content.replace("{{JSON_DATA}}", json_data)
-    html_content = html_content.replace("{{JSON_ITEMS}}", json_items)
-    html_content = html_content.replace("{{JSON_CONTAINERS}}", json_containers)
-    html_content = html_content.replace("{{JSON_BOUNDS}}", json_bounds)
-    
     with open(output_path, "w") as f:
-        f.write(html_content)
+        f.write(html_template)
     
     return os.path.abspath(output_path)
 
-if __name__ == "__main__":
-    # Snapshot is now in the same directory as this script
-    snapshot_path = os.path.join(os.path.dirname(__file__), "grid_snapshot.json")
-    last_mtime = 0.0
-    browser_opened = False
+def write_data_json(tiles_out, world_items, nearby_containers, bounds, output_dir):
+    data = {
+        "timestamp": time.time(),
+        "bounds": bounds,
+        "tiles": tiles_out,
+        "items": world_items,
+        "containers": nearby_containers
+    }
     
-    print(f"Monitoring {snapshot_path} for updates...")
-    print("Press Ctrl+C to stop.")
+    output_path = os.path.join(output_dir, "grid_data.json")
+    # Atomic write pattern: write to temp, rename
+    temp_path = output_path + ".tmp"
+    with open(temp_path, "w") as f:
+        json.dump(data, f)
+    os.replace(temp_path, output_path)
+
+import http.server
+import socketserver
+import threading
+
+def start_server(directory, port=8000):
+    """Starts a simple HTTP server in a daemon thread."""
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, directory=directory, **kwargs)
+        
+        # Suppress log messages for clean output
+        def log_message(self, format, *args):
+            pass
+
+    def run():
+        with socketserver.TCPServer(("", port), Handler) as httpd:
+            print(f"Serving at http://localhost:{port}")
+            httpd.serve_forever()
+
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    return port
+
+if __name__ == "__main__":
+    base_dir = os.path.dirname(__file__)
+    snapshot_path = os.path.join(base_dir, "grid_snapshot.json")
+    html_path = os.path.join(base_dir, "map_view.html")
+    
+    # Generate HTML once
+    print(f"Generating viewer at {html_path}...")
+    generate_html_map(None, output_path=html_path)
+    
+    # Start Server
+    port = start_server(base_dir, port=8000)
+    
+    # Open Browser via HTTP
+    webbrowser.open(f"http://localhost:{port}/map_view.html")
+    print("Browser opened. Monitoring for updates...")
+
+    last_mtime = 0.0
     
     try:
         while True:
             if os.path.exists(snapshot_path):
-                current_mtime = os.stat(snapshot_path).st_mtime
-                
-                if current_mtime > last_mtime:
-                    print(f"Update detected at {time.ctime(current_mtime)}")
-                    last_mtime = current_mtime
+                try:
+                    current_mtime = os.stat(snapshot_path).st_mtime
                     
-                    try:
+                    if current_mtime > last_mtime:
+                        last_mtime = current_mtime
+                        
                         with open(snapshot_path, "r") as f:
                             data = json.load(f)
                             
-                        grid = SpatialGrid()
-                        # Reconstruct grid
-                        for t_data in data["tiles"]:
-                            key = (t_data['x'], t_data['y'], t_data['z'])
-                            grid._grid[key] = GridTile(**t_data)
-                            
-                        # Calculate bounds dynamically
-                        if not data.get("tiles"):
+                        # Extract Data
+                        world_items = data.get("world_items", [])
+                        nearby_containers = data.get("nearby_containers", [])
+                        tile_data_raw = data.get("tiles", [])
+                        
+                        # Calculate Bounds
+                        if not tile_data_raw:
                             bounds = {"min_x": 0, "max_x": 100, "min_y": 0, "max_y": 100}
                         else:
-                            # Re-calculate from loaded data just to be safe
-                            xs = [t["x"] for t in data["tiles"]]
-                            ys = [t["y"] for t in data["tiles"]]
+                            xs = [t["x"] for t in tile_data_raw]
+                            ys = [t["y"] for t in tile_data_raw]
                             bounds = {
                                 "min_x": min(xs),
                                 "max_x": max(xs),
@@ -384,31 +417,22 @@ if __name__ == "__main__":
                                 "max_y": max(ys),
                             }
                         
-                        grid.min_x = bounds["min_x"]
-                        grid.max_x = bounds["max_x"]
-                        grid.min_y = bounds["min_y"]
-                        grid.max_y = bounds["max_y"]
+                        # Just pass raw tile data for JSON (optimize later if needed)
+                        tiles_out = tile_data_raw 
+
+                        write_data_json(tiles_out, world_items, nearby_containers, bounds, base_dir)
                         
-                        # Extract Items & Containers
-                        world_items = data.get("world_items", [])
-                        nearby_containers = data.get("nearby_containers", [])
-                        
-                        path = generate_html_map(grid, world_items=world_items, nearby_containers=nearby_containers)
-                        print(f"Map updated: {path}")
-                        
-                        if not browser_opened:
-                            webbrowser.open(f"file://{path}")
-                            browser_opened = True
-                            
-                    except Exception as e:
-                        print(f"Error processing snapshot: {e}")
-                        import traceback
-                        traceback.print_exc()
+                except json.JSONDecodeError:
+                    # Partial read or empty file (race condition), skip frame silently
+                    pass
+                except Exception as e:
+                    print(f"Error processing snapshot: {e}")
+                    # Don't crash loop
+                    time.sleep(1)
             else:
-                if not browser_opened:
-                    print("Waiting for snapshot file...")
+                 pass
                 
-            time.sleep(1)
+            time.sleep(0.1) # Fast poll for file changes
             
     except KeyboardInterrupt:
         print("\nStopped monitoring.")

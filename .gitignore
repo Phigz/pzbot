@@ -10,7 +10,7 @@
 !/README.md
 !/requirements.txt
 !/setup_env.sh
-!/pzbot/tools/mock_bridge/run_mock_brain.sh
+!/pzbot/tools/mock_bridge
 !/.gitignore
 
 # Ignore certain pzbot files
@@ -54,3 +54,5 @@ grid_snapshot.json
 map_view.html
 input.json
 state.json
+grid_data.json
+grid_data.json.tmp
