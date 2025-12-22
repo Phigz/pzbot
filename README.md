@@ -32,7 +32,7 @@ Utilities to streamline the development and testing loop.
 
 ## 📦 Setup & Usage
 
-**Heavy WIP, use at your own risk**
+**WIP, setup and use at your own risk :)**
 
 ---
 
