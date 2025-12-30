@@ -1,7 +1,7 @@
 import json
 import logging
 from pathlib import Path
-from pzbot.bot_runtime.ingest.state import GameState
+from bot_runtime.ingest.state import GameState
 
 logger = logging.getLogger(__name__)
 

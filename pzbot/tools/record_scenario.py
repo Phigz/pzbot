@@ -10,10 +10,11 @@ import os
 from pathlib import Path
 
 # Ensure project root is in path
-sys.path.append(str(Path(__file__).parent.parent.parent))
+# Ensure project root is in path
+sys.path.append(str(Path(__file__).parent.parent))
 
-from pzbot.bot_runtime.ingest.watcher import StateWatcher
-from pzbot.bot_runtime import config
+from bot_runtime.ingest.watcher import StateWatcher
+from bot_runtime import config
 
 # Setup Logging
 logging.basicConfig(

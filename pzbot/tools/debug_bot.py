@@ -1,0 +1,347 @@
+
+import os
+import sys
+import json
+import webbrowser
+import time
+import http.server
+import socketserver
+import threading
+import shutil
+from pathlib import Path
+
+# Add project root to path
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(PROJECT_ROOT)
+
+from bot_runtime import config
+
+# --- CONFIGURATION ---
+PORT = 8000
+SNAPSHOT_FILE = os.path.join(os.path.dirname(__file__), "grid_snapshot.json")
+STATE_FILE = str(config.STATE_FILE_PATH)
+HTML_FILE = os.path.join(os.path.dirname(__file__), "debug_view.html")
+
+def generate_html_template():
+    """Generates the HTML file for the debug interface."""
+    html = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PZBot Debugger</title>
+    <style>
+        :root { --bg: #111; --panel: #1e1e1e; --border: #333; --text: #eee; --text-dim: #aaa; --accent: #4CAF50; }
+        body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', monospace; margin: 0; padding: 0; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* Layout */
+        #main { flex: 1; display: flex; flex-direction: column; height: 100%; }
+        #sidebar { width: 350px; background: var(--panel); border-left: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; }
+        
+        /* Header */
+        header { padding: 10px 20px; background: #181818; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        h1 { margin: 0; font-size: 1.2em; color: var(--accent); }
+        #status { font-size: 0.8em; color: var(--text-dim); }
+
+        /* Map Area */
+        #mapContainer { flex: 1; position: relative; overflow: hidden; background: #000; display: flex; justify-content: center; align-items: center; }
+        canvas { border: 1px solid #333; image-rendering: pixelated; }
+
+        /* Sidebar Panels */
+        .panel { padding: 15px; border-bottom: 1px solid var(--border); }
+        .panel h2 { margin-top: 0; font-size: 1em; color: #ccc; border-bottom: 1px solid #444; padding-bottom: 5px; }
+        
+        .stat-row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 0.9em; }
+        .stat-label { color: var(--text-dim); }
+        .stat-val { color: #fff; font-weight: bold; }
+        
+        pre { background: #111; padding: 10px; overflow-x: auto; font-size: 0.8em; border: 1px solid #333; margin: 0; }
+        
+        /* Legend */
+        .legend { position: absolute; bottom: 10px; left: 10px; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 4px; font-size: 0.8em; pointer-events: none; }
+        .legend-item { display: flex; align-items: center; gap: 5px; margin-bottom: 2px; }
+        .box { width: 10px; height: 10px; border: 1px solid #555; }
+
+        /* Lists */
+        ul { list-style: none; padding: 0; margin: 0; }
+        li { padding: 6px 0; border-bottom: 1px solid #333; font-size: 0.85em; }
+        li:last-child { border-bottom: none; }
+        .ghost { opacity: 0.5; }
+    </style>
+</head>
+<body>
+    <div id="main">
+        <header>
+            <h1>PZBot Debugger</h1>
+            <div id="status">Waiting for connection...</div>
+        </header>
+        <div id="mapContainer">
+            <canvas id="mapCanvas"></canvas>
+            <div class="legend" id="legend">Loading Legend...</div>
+        </div>
+    </div>
+
+    <div id="sidebar">
+        <div class="panel">
+            <h2>Player State</h2>
+            <div id="playerStats">Waiting...</div>
+        </div>
+        <div class="panel">
+            <h2>World Entities</h2>
+            <div id="entityStats">Waiting...</div>
+        </div>
+        <div class="panel" style="flex: 1; display: flex; flex-direction: column;">
+            <h2>Raw JSON (Latest)</h2>
+            <pre id="rawJson" style="flex: 1;">No Data</pre>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('mapCanvas');
+        const ctx = canvas.getContext('2d');
+        const TILE_SIZE = 12;
+        const PADDING = 40;
+        
+        let lastTimestamp = 0;
+
+        // Color Mapping
+        function stringToColor(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) { hash = str.charCodeAt(i) + ((hash << 5) - hash); }
+            let color = '#';
+            for (let i = 0; i < 3; i++) {
+                let value = (hash >> (i * 8)) & 0xFF;
+                value = Math.min(255, value + 50); 
+                color += ('00' + value.toString(16)).substr(-2);
+            }
+            return color;
+        }
+
+        async function poll() {
+            try {
+                const res = await fetch('/data');
+                const data = await res.json();
+                
+                if (data.error) {
+                    document.getElementById('status').innerText = "Backend Error: " + data.error;
+                    return;
+                }
+
+                // Update Status
+                const lat = (Date.now() / 1000) - data.timestamp;
+                document.getElementById('status').innerText = `Last Update: ${new Date(data.timestamp * 1000).toLocaleTimeString()} (Latency: ${lat.toFixed(3)}s)`;
+
+                renderMap(data.grid_data);
+                renderStats(data.state_data, data.grid_data);
+                
+            } catch (e) {
+                console.error(e);
+                document.getElementById('status').innerText = "Connection Lost";
+            }
+        }
+
+        function renderStats(state, grid) {
+            if (!state || !state.player) return;
+            const p = state.player;
+            
+            // Player Panel
+            const html = `
+                <div class="stat-row"><span class="stat-label">Position</span><span class="stat-val">(${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z})</span></div>
+                <div class="stat-row"><span class="stat-label">Heading</span><span class="stat-val">${p.direction ? p.direction.toFixed(1) : 'N/A'}°</span></div>
+                <div class="stat-row"><span class="stat-label">Health</span><span class="stat-val">${p.health ? (p.health * 100).toFixed(0) : 0}%</span></div>
+                <div class="stat-row"><span class="stat-label">Status</span><span class="stat-val">${p.action_state ? p.action_state.status : 'Unknown'}</span></div>
+                <div class="stat-row"><span class="stat-label">Busy?</span><span class="stat-val">${p.is_moving ? 'MOVING' : 'IDLE'}</span></div>
+            `;
+            document.getElementById('playerStats').innerHTML = html;
+
+            // Entities Panel
+            // Using grid data for consistent "World Model" view, but state has raw zombies
+            const zombies = (state.surroundings && state.surroundings.zombies) ? state.surroundings.zombies.length : 0;
+            const items = (grid && grid.items) ? grid.items.length : 0;
+            const containers = (grid && grid.containers) ? grid.containers.length : 0;
+            
+            // Short list of nearest container
+            let nearCont = "None";
+            if (grid && grid.containers && grid.containers.length > 0) {
+                 // Simple closest logic
+                 nearCont = `${grid.containers.length} visible`;
+            }
+
+            const entHtml = `
+                <div class="stat-row"><span class="stat-label">Zombies (Visible)</span><span class="stat-val" style="color: #ff5555">${zombies}</span></div>
+                <div class="stat-row"><span class="stat-label">Items (Memory)</span><span class="stat-val" style="color: #00ffff">${items}</span></div>
+                <div class="stat-row"><span class="stat-label">Containers</span><span class="stat-val" style="color: gold">${containers}</span></div>
+            `;
+            document.getElementById('entityStats').innerHTML = entHtml;
+
+            // Raw JSON (Subset)
+            const debugView = {
+                actions: p.action_state,
+                stats: p.stats,
+                time: state.time
+            };
+            document.getElementById('rawJson').innerText = JSON.stringify(debugView, null, 2);
+        }
+
+        function renderMap(grid) {
+            if (!grid || !grid.tiles) return;
+
+            const tiles = grid.tiles;
+            const bounds = grid.bounds;
+            if (!bounds) return;
+
+            // Auto-resize
+            const width = (bounds.max_x - bounds.min_x + 1) * TILE_SIZE + (PADDING * 2);
+            const height = (bounds.max_y - bounds.min_y + 1) * TILE_SIZE + (PADDING * 2);
+            
+            if (canvas.width !== width || canvas.height !== height) {
+                canvas.width = width;
+                canvas.height = height;
+            }
+
+            // Clear
+            ctx.fillStyle = "#000";
+            ctx.fillRect(0, 0, width, height);
+
+            const toCanvas = (x, y) => ({
+                x: (x - bounds.min_x) * TILE_SIZE + PADDING,
+                y: (y - bounds.min_y) * TILE_SIZE + PADDING
+            });
+
+            // Draw Tiles
+            tiles.forEach(t => {
+                const pos = toCanvas(t.x, t.y);
+                
+                // Color logic
+                if (t.room && t.room !== "outside") ctx.fillStyle = stringToColor(t.room);
+                else {
+                    switch(t.layer) {
+                        case 'Tree': ctx.fillStyle = '#1B5E20'; break;
+                        case 'Vegetation': ctx.fillStyle = '#2E7D32'; break;
+                        case 'Street': ctx.fillStyle = '#444'; break;
+                        case 'Floor': ctx.fillStyle = '#5D4037'; break;
+                        case 'FenceHigh': ctx.fillStyle = '#FF9800'; break;
+                        case 'Wall': ctx.fillStyle = '#B71C1C'; break;
+                        default: ctx.fillStyle = '#388E3C'; // Grass/Default
+                    }
+                }
+                ctx.fillRect(pos.x, pos.y, TILE_SIZE - 1, TILE_SIZE - 1);
+            });
+
+            // Draw Containers
+            if (grid.containers) {
+                grid.containers.forEach(c => {
+                    const pos = toCanvas(c.x, c.y);
+                    const isVis = c.is_visible !== false;
+                    
+                    ctx.fillStyle = isVis ? "#FFD700" : "#665500";
+                    ctx.beginPath();
+                    ctx.arc(pos.x + TILE_SIZE/2, pos.y + TILE_SIZE/2, TILE_SIZE/2.5, 0, 2 * Math.PI);
+                    ctx.fill();
+                    ctx.strokeStyle = "#000";
+                    ctx.stroke();
+                });
+            }
+
+            // Draw Items
+            if (grid.items) {
+                grid.items.forEach(i => {
+                    const pos = toCanvas(i.x, i.y);
+                    ctx.fillStyle = "#00FFFF";
+                    ctx.beginPath();
+                    ctx.arc(pos.x + TILE_SIZE/2, pos.y + TILE_SIZE/2, TILE_SIZE/4, 0, 2 * Math.PI);
+                    ctx.fill();
+                });
+            }
+
+            // Legend Update
+            const uniqueLayers = [...new Set(tiles.map(t => t.layer).filter(l=>l))];
+            let legendHtml = uniqueLayers.map(l => {
+                let col = '#388E3C';
+                if(l=='Tree') col='#1B5E20';
+                if(l=='Street') col='#444';
+                if(l=='Wall') col='#B71C1C';
+                return `<div class="legend-item"><div class="box" style="background: ${col}"></div> ${l}</div>`;
+            }).join('');
+            legendHtml += `<div class="legend-item"><div class="box" style="background: #FFD700; border-radius: 50%"></div> Container</div>`;
+            document.getElementById('legend').innerHTML = legendHtml;
+        }
+
+        setInterval(poll, 500);
+        poll();
+    </script>
+</body>
+</html>
+    """
+    with open(HTML_FILE, 'w') as f:
+        f.write(html)
+    return HTML_FILE
+
+class RequestHandler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == '/':
+            self.path = '/debug_view.html'
+            return http.server.SimpleHTTPRequestHandler.do_GET(self)
+        
+        if self.path == '/debug_view.html':
+            return http.server.SimpleHTTPRequestHandler.do_GET(self)
+
+        if self.path == '/data':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            
+            # Read files
+            response_data = {
+                "timestamp": time.time(),
+                "state_data": {},
+                "grid_data": {}
+            }
+            
+            # Read State
+            if os.path.exists(STATE_FILE):
+                try:
+                    with open(STATE_FILE, 'r') as f:
+                        response_data["state_data"] = json.load(f)
+                except Exception:
+                    pass
+            
+            # Read Grid Snapshot
+            if os.path.exists(SNAPSHOT_FILE):
+                try:
+                    with open(SNAPSHOT_FILE, 'r') as f:
+                        response_data["grid_data"] = json.load(f)
+                except Exception:
+                    pass
+            
+            self.wfile.write(json.dumps(response_data).encode())
+            return
+
+        # Default
+        return http.server.SimpleHTTPRequestHandler.do_GET(self)
+
+def main():
+    print(f"Starting PZBot Debugger...")
+    
+    # 1. Clean up old snapshots to ensure we see fresh data
+    if os.path.exists(SNAPSHOT_FILE):
+        try:
+            os.remove(SNAPSHOT_FILE)
+            print(f"Cleared old snapshot: {SNAPSHOT_FILE}")
+        except Exception as e:
+            print(f"Warning: Could not clear snapshot: {e}")
+
+    # 2. Generate HTML
+    generate_html_template()
+    print(f"Generated UI: {HTML_FILE}")
+
+    # 3. Start Server
+    with socketserver.TCPServer(("", PORT), RequestHandler) as httpd:
+        print(f"Serving debug interface at http://localhost:{PORT}")
+        webbrowser.open(f"http://localhost:{PORT}")
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            print("\nShutting down.")
+
+if __name__ == "__main__":
+    main()

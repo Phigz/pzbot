@@ -25,7 +25,7 @@ Utilities to streamline the development and testing loop.
 *   **`launch_pz.bat`**: A single command to kill stale processes, configure launch options, and start the game in debug mode.
 *   **`configure_launch.py`**: Manages launch configurations (New Game vs. Continue).
 *   **`click_start_check.py`**: Automates the "Click to Start" interaction to ensure zero-interaction boot-up.
-*   **`tools/visualize_grid.py`**: A live HTML map visualizer to inspect the bot's internal world model.
+*   **`tools/debug_bot.py`**: A unified debugger that visualizes the bot's memory map and monitors real-time state data (player stats, logs) in a web browser.
 *   **`tools/mock_bridge`**: A standalone emulator that mimics the game's Lua API, allowing for offline testing and rapid iteration of bot logic against specific scenarios (e.g., combat, pathfinding).
 
 ---

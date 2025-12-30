@@ -4,8 +4,8 @@ import logging
 from pathlib import Path
 from typing import Callable, Optional
 from threading import Thread, Event
-from pzbot.bot_runtime.ingest.state import GameState
-from pzbot.bot_runtime.ingest.parser import StateParser
+from bot_runtime.ingest.state import GameState
+from bot_runtime.ingest.parser import StateParser
 
 logger = logging.getLogger(__name__)
 
