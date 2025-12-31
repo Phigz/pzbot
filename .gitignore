@@ -15,6 +15,7 @@
 
 # Ignore certain pzbot files
 /pzbot/logs/*
+/pzbot/data/*
 
 # Mods: Ignore everything except AISurvivorBridge
 /mods/*

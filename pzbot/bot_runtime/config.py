@@ -8,8 +8,12 @@ class BotConfig(BaseModel):
     Centralized configuration for the Bot Runtime.
     Loads from config/config.yaml if present.
     """
+    MEMORY_TTL_GLOBAL: int = Field(default=60000)
     MEMORY_TTL_ZOMBIE: int = Field(default=10000)
-    MEMORY_TTL_STATIC: int = Field(default=300000)
+    MEMORY_TTL_CONTAINER: int = Field(default=300000)
+    MEMORY_TTL_VEHICLE: int = Field(default=300000)
+    MEMORY_TTL_ITEM: int = Field(default=60000)
+    
     VISION_RADIUS_ZOMBIE: int = 50
     VISION_RADIUS_GRID: int = 15
     LOG_LEVEL: str = "INFO"
@@ -67,7 +71,10 @@ POLLING_INTERVAL = 0.1
 # Aliases from settings
 LOG_LEVEL = settings.LOG_LEVEL
 MEMORY_TTL_ZOMBIE = settings.MEMORY_TTL_ZOMBIE
-MEMORY_TTL_STATIC = settings.MEMORY_TTL_STATIC
+MEMORY_TTL_CONTAINER = settings.MEMORY_TTL_CONTAINER
+MEMORY_TTL_VEHICLE = settings.MEMORY_TTL_VEHICLE
+MEMORY_TTL_ITEM = settings.MEMORY_TTL_ITEM
+MEMORY_TTL_GLOBAL = settings.MEMORY_TTL_GLOBAL
 VISION_RADIUS_ZOMBIE = settings.VISION_RADIUS_ZOMBIE
 VISION_RADIUS_GRID = settings.VISION_RADIUS_GRID
 

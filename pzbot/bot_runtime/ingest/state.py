@@ -1,32 +1,15 @@
-from typing import List, Dict, Optional, Any
-from typing import List, Dict, Optional, Any
-from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
-
-# Removed Vitals as it's no longer in the top-level player object
-# class Vitals(BaseModel):
-#     health: float = 0.0
-#     stamina: float = 0.0
-#     hunger: float = 0.0
-#     panic: float = 0.0
-
 import logging
-from enum import Enum
+from typing import Dict, List, Any, Optional
+
+from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
-class ZombieState(str, Enum):
-    IDLE = "IDLE"
-    WANDER = "WANDER"
-    CHASING = "CHASING"
-    ALERTED = "ALERTED"
-    ATTACKING = "ATTACKING"
-    CRAWLING = "CRAWLING"
-    STAGGERING = "STAGGERING"
-
 class LogExtraFieldsBase(BaseModel):
-    model_config = ConfigDict(extra='ignore')
+    class Config:
+        extra = 'ignore' # Ignore fields we don't know about yet (but ideally we log them)
+        populate_by_name = True
 
-    @model_validator(mode='before')
     @classmethod
     def check_for_extra_fields(cls, data: Any) -> Any:
         if isinstance(data, dict):
@@ -58,93 +41,80 @@ class PlayerStateFlags(LogExtraFieldsBase):
     sprinting: bool = False
     in_vehicle: bool = False
     is_sitting: bool = False
-    # Extra fields from util.lua/initialization
-    asleep: bool = False
-    moving: bool = False
-    driving: bool = False
-    bumped: bool = False
-    climbing: bool = False
-    attacking: bool = False
+    at_window: bool = False
+    read_book: bool = False
+    is_driving: bool = False
 
-class BodyPart(LogExtraFieldsBase):
-    health: float
-    bandaged: bool
-    bleeding: bool
-    bitten: bool
-    scratched: bool
-    deep_wound: bool
-    # Extra fields from ObservationClient.lua
-    pain: float = 0.0
-    stitch: bool = False
-    burn: bool = False
-    fracture: bool = False
-    glass: bool = False
-    splinted: bool = False
-    bullet: bool = False
-    infection: float = 0.0
+class PlayerBody(LogExtraFieldsBase):
+    health: float = 0.0
+    stamina: float = 0.0
+    hunger: float = 0.0
+    thirst: float = 0.0
+    stress: float = 0.0
+    fatigue: float = 0.0
+    panic: float = 0.0
+    temperature: float = 0.0
+    is_infected: bool = False
+    is_bitten: bool = False
+    is_scratched: bool = False
+    is_dead: bool = False
 
-class Body(LogExtraFieldsBase):
-    health: float = 100.0
-    temperature: float = 37.0
-    parts: Dict[str, BodyPart] = Field(default_factory=dict)
+class ActionState(LogExtraFieldsBase):
+    status: str = "IDLE"
+    current_action: str = ""
+    current_action_target: str = ""
+    queue_length: int = 0
+    
+    # New Fields based on mod output
+    batch_id: int = 0
+    batch_index: int = 0
+    queue_busy: bool = False
+    current_action_id: Optional[str] = None
+    current_action_type: str = "IDLE"
 
-class InventoryItem(LogExtraFieldsBase):
-    id: int
-    type: str
-    cat: str
-    name: str
-    weight: float
-    cond: float
+class Player(LogExtraFieldsBase):
+    guid: str = "unknown"
+    player_num: int = 0
+    position: Position
+    flags: PlayerStateFlags = Field(default_factory=PlayerStateFlags)
+    body: PlayerBody = Field(default_factory=PlayerBody)
+    stats: Dict[str, Any] = Field(default_factory=dict)
+    vision: Optional['Vision'] = None 
+    action_state: ActionState = Field(default_factory=ActionState)
+    # New Fields for UI
+    moodles: List[Dict[str, Any]] = Field(default_factory=list)
+    inventory: List[Dict[str, Any]] = Field(default_factory=list)
 
-class Inventory(LogExtraFieldsBase):
-    held: Dict[str, Any] = Field(default_factory=dict)
-    worn: List[InventoryItem] = Field(default_factory=list)
-    main: List[InventoryItem] = Field(default_factory=list)
-
-    @field_validator('worn', 'main', mode='before')
+    @field_validator('moodles', 'inventory', mode='before')
     @classmethod
-    def allow_empty_dict_as_list(cls, v):
-        if isinstance(v, dict) and not v:
-            return []
-        if isinstance(v, dict):
-             # If it's a dict but not empty, maybe it's a map of id->item?
-             # For now, let's treat values as list items
-            return list(v.values())
+    def validate_lists(cls, v):
+        if isinstance(v, dict) and not v: return []
+        if isinstance(v, dict): return list(v.values())
         return v
 
 class Tile(LogExtraFieldsBase):
     x: int
     y: int
     z: int
+    w: bool # walkable
     room: Optional[str] = None
     layer: Optional[str] = None
-    is_walkable: bool = Field(default=True, alias='w')
 
 class WorldObject(LogExtraFieldsBase):
     id: str
-    type: str
+    type: str # Zombie, Player, Window, Door
     x: int
     y: int
     z: int
     meta: Dict[str, Any] = Field(default_factory=dict)
 
-class Neighbor(LogExtraFieldsBase):
-    x: int
-    y: int
-    status: str
-    objects: List[Dict[str, Any]] = Field(default_factory=list)
-
-    @field_validator('objects', mode='before')
+    @field_validator('meta', mode='before')
     @classmethod
     def allow_empty_dict_as_list(cls, v):
-        if isinstance(v, dict) and not v:
-            return []
-        if isinstance(v, dict):
-             # If it's a dict but not empty, maybe it's a map?
-             # Treat values as list items
-            return list(v.values())
+        if isinstance(v, list) and not v:
+            return {}
         return v
-
+    
 class WorldItem(LogExtraFieldsBase):
     id: str
     type: str
@@ -155,10 +125,18 @@ class WorldItem(LogExtraFieldsBase):
     z: int
     count: int = 1
 
+    class Config:
+        extra = 'allow'
+
 class ContainerItem(LogExtraFieldsBase):
+    id: Optional[str] = None
     type: str
     name: str
     count: int = 1
+    category: str = "Unknown"
+
+    class Config:
+        extra = 'allow'
 
 class Container(LogExtraFieldsBase):
     type: str = "Container"
@@ -167,8 +145,35 @@ class Container(LogExtraFieldsBase):
     y: int
     z: int
     items: List[ContainerItem] = Field(default_factory=list)
+    meta: Dict[str, Any] = Field(default_factory=dict)
 
     @field_validator('items', mode='before')
+    @classmethod
+    def allow_empty_dict_as_list(cls, v):
+        if isinstance(v, dict) and not v:
+            return []
+        if isinstance(v, dict):
+            return list(v.values())
+        return v
+    
+    @field_validator('meta', mode='before')
+    @classmethod
+    def allow_empty_dict_as_list_meta(cls, v):
+        if isinstance(v, list) and not v:
+            return {}
+        return v
+
+class Vehicle(LogExtraFieldsBase):
+    id: str
+    type: str # "Vehicle"
+    object_type: str # ScriptName e.g. "Base.Van"
+    x: float
+    y: float
+    z: float
+    meta: Dict[str, Any] = Field(default_factory=dict)
+    parts: List[Dict[str, Any]] = Field(default_factory=list)
+
+    @field_validator('parts', mode='before')
     @classmethod
     def allow_empty_dict_as_list(cls, v):
         if isinstance(v, dict) and not v:
@@ -182,68 +187,45 @@ class Vision(LogExtraFieldsBase):
     timestamp: int = 0
     tiles: List[Tile] = Field(default_factory=list)
     objects: List[WorldObject] = Field(default_factory=list)
+    vehicles: List[Vehicle] = Field(default_factory=list)
     world_items: List[WorldItem] = Field(default_factory=list)
     nearby_containers: List[Container] = Field(default_factory=list)
-    neighbors: Dict[str, Neighbor] = Field(default_factory=dict)
+    neighbors: Dict[str, Any] = Field(default_factory=dict)
     debug_z: Optional[Dict[str, Any]] = None
 
-    @field_validator('tiles', 'objects', 'world_items', 'nearby_containers', mode='before')
+    @field_validator('tiles', 'objects', 'world_items', 'nearby_containers', 'vehicles', mode='before')
     @classmethod
-    def allow_empty_dict_as_list(cls, v):
+    def validate_lists(cls, v, info):
+        # Lua output often sends empty dict {} instead of empty list []
         if isinstance(v, dict) and not v:
             return []
         if isinstance(v, dict):
-            return list(v.values())
+             # Try to convert dict to list (keys usually strings "1", "2" etc.)
+             return list(v.values())
         return v
 
-class ActionState(LogExtraFieldsBase):
-    status: str = "idle"
-    sequence_number: int = -1
-    queue_busy: bool = False
-    current_action_id: Optional[str] = None
-    current_action_type: Optional[str] = None
-
-class Vitals(LogExtraFieldsBase):
-    health: float = 0.0
-    stamina: float = 0.0
-    hunger: float = 0.0
-    panic: float = 0.0
-
-class Player(LogExtraFieldsBase):
-    status: str
-    vitals: Optional[Vitals] = None
-    position: Position
-    state: PlayerStateFlags
-    rotation: float
-    body: Body
-    moodles: Dict[str, Any] = Field(default_factory=dict)
-    inventory: Inventory
-    vision: Vision = Field(default_factory=Vision)
-    action_state: ActionState = Field(default_factory=ActionState)
-    
-    # Extra schema fields
-    equipped: Optional[Dict[str, Any]] = None
-    attached: Optional[Dict[str, Any]] = None
-    traits: List[str] = Field(default_factory=list)
-    skills: Optional[Dict[str, Any]] = None
-    profession: Optional[str] = None
-    active_action_id: Optional[str] = None
-
 class Environment(LogExtraFieldsBase):
-    nearby_containers: List[Container] = Field(default_factory=list)
+    time_of_day: float = 0.0
+    weather: str = ""
+    temperature: float = 0.0
+    rain_intensity: float = 0.0
+    fog_intensity: float = 0.0
+    nearby_containers: List[Container] = Field(default_factory=list) # Global containers fallback
 
     @field_validator('nearby_containers', mode='before')
     @classmethod
-    def allow_empty_dict_as_list(cls, v):
-        if isinstance(v, dict) and not v:
-            return []
-        if isinstance(v, dict):
-            return list(v.values())
+    def validate_containers(cls, v):
+        if isinstance(v, dict) and not v: return []
+        if isinstance(v, dict): return list(v.values())
         return v
 
 class GameState(LogExtraFieldsBase):
-    timestamp: int
-    tick: float
+    timestamp: float = 0.0
+    tick: float = 0.0
     player: Player
-    environment: Environment = Field(default_factory=Environment)
-    events: List[Any] = Field(default_factory=list)
+    environment: Optional[Environment] = None
+
+    def __init__(self, **data):
+        # We need to handle potential serialization quirks from Lua here BEFORE Pydantic
+        # Or rely on type adapters.
+        super().__init__(**data)

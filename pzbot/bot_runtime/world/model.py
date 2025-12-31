@@ -1,9 +1,11 @@
 import logging
 import time
 from typing import Optional
-from bot_runtime.ingest.state import GameState, Player, Vision, ZombieState
-from .entity_manager import EntityManager
-from bot_runtime.world.grid import SpatialGrid
+from bot_runtime.ingest.state import GameState, Player, Vision
+from bot_runtime.world.processors.player_system import PlayerSystem
+from bot_runtime.world.processors.memory_system import MemorySystem
+from bot_runtime.world.processors.grid_system import GridSystem
+from bot_runtime.config import BASE_DIR
 from bot_runtime.world.view import WorldView, EntityType
 from .types import EntityData
 
@@ -20,8 +22,9 @@ class WorldModel(WorldView):
         self.last_update_time = 0.0
         
         # Persistent Sub-systems
-        self.entities = EntityManager()
-        self.grid = SpatialGrid()
+        self.player_system = PlayerSystem()
+        self.memory = MemorySystem()
+        self.grid = GridSystem(BASE_DIR)
 
     def update(self, new_state: GameState):
         """Updates the world model with a new game state."""
@@ -29,20 +32,24 @@ class WorldModel(WorldView):
         self.tick_count += 1
         self.last_update_time = time.time()
         
-        # 1. Update Map with new vision data
-        if new_state.player and new_state.player.vision:
-            vision = new_state.player.vision
-            
-            # Use the new consolidated Grid
-            if vision.tiles:
-                self.grid.update(vision.tiles)
+        # 1. Update Player
+        if new_state.player:
+            self.player_system.update(new_state.player)
+
+            # 2. Update Memory & Grid from Vision
+            if new_state.player.vision:
+                vision = new_state.player.vision
                 
-            # Update Entities
-            self.entities.process_vision(
-                visible_objects=vision.objects,
-                world_items=vision.world_items, # New: Persistent Items
-                containers=vision.nearby_containers # New: Persistent Containers
-            )
+                # Update Memory (Entities, Containers, Vehicles)
+                self.memory.update(vision)
+                
+                # Update Grid (Chunks)
+                if vision.tiles:
+                    self.grid.update(vision.tiles, new_state.timestamp)
+        
+        # 3. Decay / Maintenance
+        self.memory.decay()
+        self.grid.maintenance()
 
             
     @property
@@ -57,7 +64,11 @@ class WorldModel(WorldView):
 
     def get_entities(self, type_filter: Optional[str] = None) -> list[EntityData]:
         """Returns a list of tracked entities."""
-        all_entities = list(self.entities.entities.values())
+        # Aggregate entities from MemorySystem
+        all_entities = []
+        for mem in self.memory.entities.values():
+            all_entities.append(mem.data)
+        
         if type_filter:
             return [e for e in all_entities if e.type == type_filter]
         return all_entities

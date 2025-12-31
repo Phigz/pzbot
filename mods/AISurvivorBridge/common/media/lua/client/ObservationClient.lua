@@ -21,14 +21,40 @@ local state = nil
 -- Helper to structure item data
 local function getItemData(item)
     if not item then return nil end
-    return {
+    
+    -- 0-1 Normalized Condition
+    local cond = 0
+    -- Check if method exists before calling
+    if item.getConditionMax and item.getCondition then
+        local max = item:getConditionMax()
+        if max > 0 then
+            cond = item:getCondition() / max
+        end
+    end
+    
+    local isDamageable = false
+    -- Check if method exists
+    if item.isDamageable then
+        isDamageable = item:isDamageable()
+    end
+
+    local d = {
         id = item:getID(),
         type = item:getFullType(), -- Base.Axe
         cat = tostring(item:getCategory()),
         name = item:getName(),
         weight = item:getActualWeight(),
-        cond = item:getCondition() / item:getConditionMax() -- Normalized 0-1
+        cond = cond,
+        isDamageable = isDamageable
     }
+
+    if instanceof(item, "HandWeapon") then
+         d.minDmg = item:getMinDamage()
+         d.maxDmg = item:getMaxDamage()
+         d.crit = item:getCriticalChance()
+    end
+    
+    return d
 end
 
 function ObservationClient.OnGameStart()
@@ -142,68 +168,79 @@ function ObservationClient.OnPlayerUpdateObserve(player)
         end
 
         -- === MOODLES === 
-        -- Probe for Moodle API (Run Once)
-        if not _G.api_v42_probed_moodles then
-             print("[INSPECT] Probing Moodle API...")
-             local moods = player:getMoodles()
-             if moods then
-                 local candidates = {"getNumMoodles", "size", "getMoodleLevel", "getMoodleType", "getGoodBadNeutral", "getDisplayName"}
-                 for _, method in ipairs(candidates) do
-                     if moods[method] then
-                          print("[INSPECT] Found Moodle Candidate: " .. method)
-                          -- Try calling simple getters
-                          if method == "getNumMoodles" or method == "size" then
-                               local status, res = pcall(moods[method], moods)
-                               print("[INSPECT] Call " .. method .. " -> " .. tostring(status) .. " : " .. tostring(res))
-                          end
-                     end
-                 end
-             end
-             _G.api_v42_probed_moodles = true
-        end
-        
         p.moodles = {}
-        -- Placeholder until probe confirms iteration method
-        -- local moods = player:getMoodles()
-        -- for i=0, moods:getNumMoodles()-1 do ...
-        --     local level = moods:getMoodleLevel(i)
-        --     if level > 0 then
-        --         local typeName = tostring(moods:getMoodleType(i))
-        --         p.moodles[typeName] = level
-        --     end
-        -- end
+        local moodles = player:getMoodles()
+        if moodles then
+            -- Safe iteration count
+            local count = 0
+            if moodles.getNumMoodles then 
+                 count = moodles:getNumMoodles()
+            elseif moodles.size then 
+                 count = moodles:size() 
+            end
 
-        -- === INVENTORY ===
-        local inv = player:getInventory()
-        p.inventory = {
-            held = {
-                primary = getItemData(player:getPrimaryHandItem()),
-                secondary = getItemData(player:getSecondaryHandItem())
-            },
-            worn = {},
-            main = {}
-        }
-
-        -- Worn Items (Restored for v42)
-        local wornItems = player:getWornItems()
-        if wornItems then
-            for i=0, wornItems:size()-1 do
-                local worn = wornItems:getItemByIndex(i)
-                local fullType = tostring(worn:getFullType())
-                
-                -- Filter out v42 visual wounds (they appear as clothing)
-                if not string.find(fullType, "Wound_") then
-                    table.insert(p.inventory.worn, getItemData(worn))
+            for i=0, count-1 do
+                local level = moodles:getMoodleLevel(i)
+                if level > 0 then
+                    local typeName = tostring(moodles:getMoodleType(i))
+                    local sentiment = 0
+                    -- 0=Neutral, 1=Good, 2=Bad (Standard PZ Enum usually)
+                    -- Or we can blindly trust the integer
+                    if moodles.getGoodBadNeutral then
+                        sentiment = moodles:getGoodBadNeutral(i)
+                        -- Mapping (Observation required, assuming 1=Good, 2=Bad, 0=Neutral/Info for now)
+                        -- Actually standard is: 0=Good, 1=Bad, 2=Neutral ? Or 1=Good, 2=Bad?
+                        -- We will pass the raw int and handle visualization in debug_bot
+                    end
+                    
+                    table.insert(p.moodles, {
+                        name = typeName,
+                        value = level,
+                        sentiment = sentiment
+                    })
                 end
             end
         end
 
-        -- Main Inventory Content
+        -- === INVENTORY ===
+        -- Flattened list for bot simplicity
+        p.inventory = {}
+        
+        local function processItem(item, list)
+            local d = getItemData(item)
+            if not d then return end
+            
+            -- Check for nested items (Bag, KeyRing, etc.)
+            if item.getInventory then
+                local inv = item:getInventory()
+                if inv and not inv:isEmpty() then
+                    d.items = {}
+                    local subItems = inv:getItems()
+                    for j=0, subItems:size()-1 do
+                        local sub = subItems:get(j)
+                        -- Recursive call
+                        processItem(sub, d.items)
+                    end
+                end
+            end
+            
+            table.insert(list, d)
+        end
+
+        local inv = player:getInventory()
+        -- 1. Main Inventory
         local items = inv:getItems()
         for i=0, items:size()-1 do
-            local item = items:get(i)
-            table.insert(p.inventory.main, getItemData(item))
+             processItem(items:get(i), p.inventory)
         end
+        
+        -- 2. Equipped (Primary/Secondary) - Add only if NOT already in main (usually are in main too?)
+        -- In PZ, equipped items are in inventory. Sticky situation.
+        -- Just relying on main inventory listing is usually enough.
+        -- We can mark them as equipped if needed.
+        
+        -- Mark timestamp for debugging
+        p.inventory_timestamp = now
         
         -- === ACTION STATE ===
         local ActionClient = _G.AISurvivorBridge_ActionClient

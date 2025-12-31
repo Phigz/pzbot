@@ -49,6 +49,4 @@ We have provided tools to restart the game quickly for development loops.
 - `dev_tools/` - Windows automation scripts.
 
 ## ⚠️ Troubleshooting
-- **Missing `state.json`**: Ensure you are loaded into a world (not just main menu).
-- **Lua Errors**: Check `C:\Users\<YOU>\Zomboid\console.txt` for stack traces.
-- **Moodles/Body Parts missing**: Ensure you are on v42.13+ as API names have changed.
+- **!!Panic!!**

@@ -133,3 +133,6 @@ class EntityManager:
 
     def get_known_items(self) -> List[EntityData]:
         return [e for e in self.entities.values() if e.type == 'WorldItem']
+
+    def get_known_zombies(self) -> List[EntityData]:
+        return [e for e in self.entities.values() if e.type == 'Zombie']

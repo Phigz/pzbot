@@ -56,22 +56,36 @@ def main():
             
             # Periodic Snapshot
             if time.time() - last_snapshot_time > SNAPSHOT_INTERVAL:
-                # Extract Persistent Resource Data from EntityManager
-                def transform_entities(entities):
-                    res = []
-                    for e in entities:
-                        # Base fields
-                        d = e.model_dump(exclude={'properties'})
-                        # Merge properties (flatten)
-                        if e.properties:
-                            d.update(e.properties)
-                        res.append(d)
+                # Extract Persistent Resource Data
+                # Note: MemorySystem getters return list of dicts with properties embedded
+                # We assume debug_bot can handle this or that returned dicts are compliant
+                # The returned dict (EntityData.dict) has properties nested in 'properties'
+                # but input to snapshot expects top-level fields for some tools? 
+                
+                # Let's write a small helper to flatten properties for compatibility
+                def flatten_entity(entity_dict):
+                    props = entity_dict.pop('properties', {}) or {}
+                    # Prioritize concrete fields in entity_dict over props
+                    # So update props with entity_dict, then return props
+                    # Wait, we want dict -> props -> result. 
+                    # dict has id, type, x, y, z. props has extra.
+                    res = props.copy()
+                    res.update(entity_dict)
                     return res
 
-                w_items = transform_entities(world_model.entities.get_known_items())
-                n_containers = transform_entities(world_model.entities.get_known_containers())
+                w_items = [flatten_entity(e) for e in world_model.memory.get_known_items()]
+                n_containers = [flatten_entity(e) for e in world_model.memory.get_known_containers()]
+                known_zombies = [flatten_entity(e) for e in world_model.memory.get_zombies()]
+                vehicles = [flatten_entity(e) for e in world_model.memory.get_known_vehicles()]
                 
-                world_model.grid.save_snapshot(str(snapshot_path), world_items=w_items, nearby_containers=n_containers)
+                grid_data = {
+                    "zombies": known_zombies,
+                    "nearby_containers": n_containers,
+                    "world_items": w_items,
+                    "vehicles": vehicles
+                }
+                
+                world_model.grid.save_snapshot(str(snapshot_path), grid_data)
                 last_snapshot_time = time.time()
 
     except KeyboardInterrupt:

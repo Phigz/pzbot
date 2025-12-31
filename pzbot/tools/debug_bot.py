@@ -1,347 +1,644 @@
-
-import os
-import sys
-import json
-import webbrowser
-import time
 import http.server
 import socketserver
-import threading
-import shutil
-from pathlib import Path
+import webbrowser
+import json
+import os
+import time
 
-# Add project root to path
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(PROJECT_ROOT)
-
-from bot_runtime import config
-
-# --- CONFIGURATION ---
 PORT = 8000
-SNAPSHOT_FILE = os.path.join(os.path.dirname(__file__), "grid_snapshot.json")
-STATE_FILE = str(config.STATE_FILE_PATH)
-HTML_FILE = os.path.join(os.path.dirname(__file__), "debug_view.html")
+HTML_FILE = 'debug_view.html'
 
-def generate_html_template():
-    """Generates the HTML file for the debug interface."""
-    html = """
-<!DOCTYPE html>
+html = """<!DOCTYPE html>
 <html>
 <head>
     <title>PZBot Debugger</title>
     <style>
-        :root { --bg: #111; --panel: #1e1e1e; --border: #333; --text: #eee; --text-dim: #aaa; --accent: #4CAF50; }
+        :root { --bg: #111; --panel: #1e1e1e; --border: #333; --text: #eee; --text-dim: #888; --accent: #4CAF50; --warn: #FF9800; --danger: #f44336; }
         body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', monospace; margin: 0; padding: 0; display: flex; height: 100vh; overflow: hidden; }
         
         /* Layout */
-        #main { flex: 1; display: flex; flex-direction: column; height: 100%; }
-        #sidebar { width: 350px; background: var(--panel); border-left: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; }
+        #main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        #sidebar { width: 400px; background: var(--panel); border-left: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
         
         /* Header */
-        header { padding: 10px 20px; background: #181818; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-        h1 { margin: 0; font-size: 1.2em; color: var(--accent); }
-        #status { font-size: 0.8em; color: var(--text-dim); }
+        header { padding: 4px 15px; background: #181818; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; height: 40px; }
+        h1 { margin: 0; font-size: 1.0em; color: var(--accent); font-weight: 600; }
+        #status { font-size: 0.75em; color: var(--text-dim); }
 
         /* Map Area */
-        #mapContainer { flex: 1; position: relative; overflow: hidden; background: #000; display: flex; justify-content: center; align-items: center; }
-        canvas { border: 1px solid #333; image-rendering: pixelated; }
+        #mapContainer { flex: 1; position: relative; overflow: hidden; background: #050505; }
+        canvas { display: block; image-rendering: pixelated; }
 
         /* Sidebar Panels */
-        .panel { padding: 15px; border-bottom: 1px solid var(--border); }
-        .panel h2 { margin-top: 0; font-size: 1em; color: #ccc; border-bottom: 1px solid #444; padding-bottom: 5px; }
-        
-        .stat-row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 0.9em; }
-        .stat-label { color: var(--text-dim); }
-        .stat-val { color: #fff; font-weight: bold; }
-        
-        pre { background: #111; padding: 10px; overflow-x: auto; font-size: 0.8em; border: 1px solid #333; margin: 0; }
-        
-        /* Legend */
-        .legend { position: absolute; bottom: 10px; left: 10px; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 4px; font-size: 0.8em; pointer-events: none; }
-        .legend-item { display: flex; align-items: center; gap: 5px; margin-bottom: 2px; }
-        .box { width: 10px; height: 10px; border: 1px solid #555; }
+        .tabs { display: flex; border-bottom: 1px solid var(--border); background: #222; flex-shrink: 0; }
+        .tab { flex: 1; padding: 10px; text-align: center; cursor: pointer; color: var(--text-dim); font-size: 0.9em; transition: 0.2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .tab:hover { background: #2a2a2a; color: #fff; }
+        .tab.active { border-bottom: 2px solid var(--accent); color: #fff; background: var(--panel); }
 
-        /* Lists */
-        ul { list-style: none; padding: 0; margin: 0; }
-        li { padding: 6px 0; border-bottom: 1px solid #333; font-size: 0.85em; }
-        li:last-child { border-bottom: none; }
-        .ghost { opacity: 0.5; }
+        .content-pane { flex: 1; overflow-y: auto; display: none; padding: 10px; min-height: 0; }
+        .content-pane.active { display: block; }
+        
+        .section { margin-bottom: 15px; background: #252525; border-radius: 4px; padding: 10px; border: 1px solid #333; }
+        .section h2 { margin-top: 0; font-size: 0.9em; color: #ccc; border-bottom: 1px solid #444; padding-bottom: 5px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+        
+        .row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 0.85em; }
+        .label { color: var(--text-dim); }
+        .val { color: #fff; font-weight: bold; }
+        
+        /* Colors */
+        .stat-bar { height: 4px; background: #333; border-radius: 2px; margin-top: 2px; overflow: hidden; }
+        .stat-fill { height: 100%; background: var(--accent); transition: width 0.3s; }
+        .tag { display: inline-block; padding: 2px 6px; border-radius: 3px; background: #333; font-size: 0.75em; margin-right: 4px; margin-bottom: 4px; }
+        .tag.bad { background: #5a1a1a; color: #ffadad; border: 1px solid #8d2d2d; }
+        .tag.good { background: #1a3a1a; color: #adffad; border: 1px solid #2d5d2d; }
+        .item-row { padding: 4px; border-bottom: 1px solid #333; font-size: 0.8em; }
+
+        .legend { position: absolute; bottom: 10px; left: 10px; background: rgba(0,0,0,0.85); padding: 10px; border-radius: 4px; font-size: 0.75em; pointer-events: none; border: 1px solid #444; display: flex; gap: 20px; z-index: 10; }
+        .legend-section { display: flex; flex-direction: column; gap: 2px; }
+        .legend-title { font-weight: bold; color: #aaa; margin-bottom: 4px; border-bottom: 1px solid #444; padding-bottom: 2px; white-space: nowrap; }
+        .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; color: #ccc; }
+        .box { width: 12px; height: 12px; }
+        .circle { border-radius: 50%; }
+        
+        pre { font-size: 0.7em; color: #aaa; white-space: pre-wrap; word-break: break-all; }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #111; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
     </style>
 </head>
 <body>
     <div id="main">
         <header>
             <h1>PZBot Debugger</h1>
-            <div id="status">Waiting for connection...</div>
+            <div id="status">Waiting...</div>
         </header>
         <div id="mapContainer">
             <canvas id="mapCanvas"></canvas>
-            <div class="legend" id="legend">Loading Legend...</div>
+            <div class="legend" id="legend"></div>
         </div>
     </div>
 
     <div id="sidebar">
-        <div class="panel">
-            <h2>Player State</h2>
-            <div id="playerStats">Waiting...</div>
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('player')">Player</div>
+            <div class="tab" onclick="switchTab('entities')">Live</div>
+            <div class="tab" onclick="switchTab('memory')">Memory</div>
+            <div class="tab" onclick="switchTab('raw')">Raw</div>
         </div>
-        <div class="panel">
-            <h2>World Entities</h2>
-            <div id="entityStats">Waiting...</div>
+
+        <div id="player" class="content-pane active">
+            <div class="section"><h2>Vitals</h2><div id="vitalsContainer">Waiting...</div></div>
+            <div class="section"><h2>State</h2><div id="stateContainer">Waiting...</div></div>
+            <div class="section"><h2>Moodles</h2><div id="moodlesContainer">Waiting...</div></div>
+            <div class="section"><h2>Inventory</h2><div id="inventoryContainer">Waiting...</div></div>
         </div>
-        <div class="panel" style="flex: 1; display: flex; flex-direction: column;">
-            <h2>Raw JSON (Latest)</h2>
-            <pre id="rawJson" style="flex: 1;">No Data</pre>
+
+        <div id="entities" class="content-pane">
+            <div class="section"><h2>Zombies (<span id="zombieCount">0</span>)</h2><div id="zombieList"></div></div>
+            <div class="section"><h2>Containers (<span id="containerCount">0</span>)</h2><div id="containerList"></div></div>
+            <div class="section"><h2>Vehicles (<span id="vehCount">0</span>)</h2><div id="vehList"></div></div>
+        </div>
+        
+        <div id="memory" class="content-pane">
+            <div class="section"><h2>Zombies (<span id="memZombieCount">0</span>)</h2><div id="memZombieList"></div></div>
+            <div class="section"><h2>Containers (<span id="memContainerCount">0</span>)</h2><div id="memContainerList"></div></div>
+             <div class="section"><h2>Vehicles (<span id="memVehCount">0</span>)</h2><div id="memVehList"></div></div>
+        </div>
+
+        <div id="raw" class="content-pane">
+             <div class="section"><h2>Full State JSON</h2><pre id="rawJson">No Data</pre></div>
         </div>
     </div>
 
     <script>
+        function switchTab(id) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.content-pane').forEach(p => p.classList.remove('active'));
+            document.querySelector(`.tab[onclick="switchTab('${id}')"]`).classList.add('active');
+            document.getElementById(id).classList.add('active');
+        }
+
+        
+        const mapContainer = document.getElementById('mapContainer');
         const canvas = document.getElementById('mapCanvas');
         const ctx = canvas.getContext('2d');
-        const TILE_SIZE = 12;
-        const PADDING = 40;
-        
-        let lastTimestamp = 0;
+        const TILE_SIZE = 14;
 
-        // Color Mapping
-        function stringToColor(str) {
+        // Double Buffering
+        const offscreenCanvas = document.createElement('canvas');
+        const offCtx = offscreenCanvas.getContext('2d');
+        
+        // Colors (Brightened)
+        const COLORS = {
+            Tree: '#2E7D32', Vegetation: '#1b3b1b', Street: '#444', Floor: '#3a3a3a', 
+            FenceHigh: '#a0522d', FenceLow: '#cd853f', Wall: '#888', Default: '#111',
+            Window: '#aaa', Door: '#4fc',
+            ZombieLive: '#ff4444', ZombieMem: '#ff8888', 
+            ContainerLive: '#ffff00', ContainerMem: '#cccc00',
+            ItemLive: '#00ffff', ItemMem: '#00aaaa',
+            VehicleLive: '#2196F3', VehicleMem: '#1565C0', Player: '#4CAF50'
+        };
+
+        function getStringColor(t) {
+            // Priority: Room hash -> Layer -> Default
+            if (t.room && t.room !== "outside") return stringToHashColor(t.room); 
+            return COLORS[t.layer] || COLORS.Default;
+        }
+
+        function stringToHashColor(str) {
             let hash = 0;
-            for (let i = 0; i < str.length; i++) { hash = str.charCodeAt(i) + ((hash << 5) - hash); }
+            for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
             let color = '#';
             for (let i = 0; i < 3; i++) {
-                let value = (hash >> (i * 8)) & 0xFF;
-                value = Math.min(255, value + 50); 
-                color += ('00' + value.toString(16)).substr(-2);
+                let val = (hash >> (i * 8)) & 0xFF;
+                val = Math.min(150, val + 40);
+                color += ('00' + val.toString(16)).substr(-2);
             }
             return color;
+        }
+
+        function getHealthColor(h) {
+             if (h < 0.3) return '#f44336'; if (h < 0.7) return '#FF9800'; return '#4CAF50';
+        }
+        
+        const asArray = (x) => Array.isArray(x) ? x : [];
+        
+        const getTTL = (o) => {
+             if (o.ttl_remaining_ms) {
+                 const s = Math.ceil(o.ttl_remaining_ms / 1000);
+                 if (s > 86400) return ''; // Hide infinite/long TTL
+                 let c = '#4CAF50';
+                 if(s < 10) c='#f44336'; else if(s < 60) c='#FF9800';
+                 return `<span class="tag" style="color:${c}; border-color:${c}33; background:${c}11">TTL:${s}s</span>`;
+             }
+             return '';
+        }
+
+        // Helper: Render Container Contents
+        // Used for World Containers, Vehicle Parts, and Player Inventory
+        function renderContainer(c, label, color, headerSuffix) {
+            // c can be a Container object (with .items) or a Vehicle Part (with .container.items or similar)
+            // c can also be a simple Inventory Item (with .items if it's a bag, or just properties)
+            
+            let items = null;
+            let cap = "";
+            let suffix = headerSuffix || "";
+            let extraInfo = "";
+            
+            const isContainer = (c.items !== undefined) || (c.container && c.container.items);
+            
+            // 1. Standard Container or simple Item list
+            if (c.items) items = asArray(c.items);
+            // 2. Vehicle Part often has 'container' sub-object
+            else if (c.container && c.container.items) items = asArray(c.container.items);
+            
+            // Format items
+            let contentHtml = "";
+            
+            if (items && items.length > 0) {
+                 // Recursive Render
+                 contentHtml = items.map(i => renderContainer(i, i.name || i.type, color)).join('');
+            } else if (isContainer) {
+                 contentHtml = '<span style="color:#666; font-style:italic; margin-left:10px;">Empty</span>';
+            }
+            
+            // Item Logic (TTL, Coords)
+            extraInfo += getTTL(c);
+            
+            // Append Coordinates if present and NOT a top-level container (which usually passes coords in label/headerSuffix)
+            // Top level containers usually have coords in label passed by updateMemory. items don't.
+            if (c.x !== undefined && c.y !== undefined && !headerSuffix) {
+                suffix += ` <span style="color:#666; font-size:0.8em;">(${c.x},${c.y})</span>`;
+            }
+            
+            // Specialized Item Info (Condition, etc.) if available
+            // Assuming this is passed in `c`
+            // Durability Display Logic
+            // 1. Must have condition value
+            // 2. Must be damageable (according to new Lua export)
+            // 3. EXCLUDE known non-damageable categories like Keys, Literature, Container (unless special?)
+            //    Check 'cat' field.
+            
+            // NOTE: Clothing technically has condition (holes) but maybe user doesn't want bars for socks.
+            // User specifically mentioned KeyRing and ID Card. ID Card is likely Literature or Key?
+            // Let's filter strictly.
+            
+            let showDurability = false;
+            if (c.cond !== undefined && c.isDamageable) {
+                showDurability = true;
+                if (c.cat && (c.cat === 'Key' || c.cat === 'Literature')) showDurability = false;
+                // Specific override for "Key Ring" if category is ambiguous
+                if (c.name && c.name.includes("Key Ring")) showDurability = false;
+            }
+
+            if (showDurability) {
+                 const w = (c.cond * 100).toFixed(0);
+                 const col = getHealthColor(c.cond);
+                 extraInfo += `<div class="stat-bar" style="width:50px; display:inline-block; margin-left:5px;"><div class="stat-fill" style="width:${w}%; background:${col}"></div></div>`;
+            }
+
+            // Weapon Stats
+            if (c.minDmg !== undefined) {
+                 const min = c.minDmg.toFixed(1);
+                 const max = c.maxDmg ? c.maxDmg.toFixed(1) : "?";
+                 const crit = c.crit ? c.crit.toFixed(0) : "0";
+                 extraInfo += `<span style="font-size:0.8em; color:#aaa; margin-left:5px;">Dmg: ${min}-${max} | Crit: ${crit}%</span>`;
+            }
+                
+            // If it's not a container and has no contents, hiding the content div entirely is cleaner
+            const showContent = (items && items.length > 0) || (items && isContainer);
+            
+            // Append ID if available (checking top level c.id)
+            let idSpan = "";
+            if (c.id) {
+                 idSpan = `<span style="color:#555; font-size:0.75em; margin-left:4px;">[#${c.id}]</span>`;
+            }
+
+            return `<div class="item-row" style="color:${color}">
+                <strong>${label}</strong>${idSpan} ${extraInfo} ${cap} ${suffix}
+                ${showContent ? `<div style="margin-left:10px; margin-top:2px;">${contentHtml}</div>` : ''}
+            </div>`;
         }
 
         async function poll() {
             try {
                 const res = await fetch('/data');
                 const data = await res.json();
+                if (data.error) document.getElementById('status').innerText = "Backend Error: " + data.error;
                 
-                if (data.error) {
-                    document.getElementById('status').innerText = "Backend Error: " + data.error;
-                    return;
+                if (data.state_data) {
+                    const lat = (Date.now() / 1000) - data.timestamp;
+                    document.getElementById('status').innerText = `Tick: ${data.state_data.tick || 0} | Latency: ${lat.toFixed(3)}s`;
+                    updatePlayer(data.state_data.player);
+                    updateEntities(data.state_data);
+                    updateRaw(data.state_data);
                 }
-
-                // Update Status
-                const lat = (Date.now() / 1000) - data.timestamp;
-                document.getElementById('status').innerText = `Last Update: ${new Date(data.timestamp * 1000).toLocaleTimeString()} (Latency: ${lat.toFixed(3)}s)`;
-
-                renderMap(data.grid_data);
-                renderStats(data.state_data, data.grid_data);
-                
+                if (data.grid_data) {
+                    updateMemory(data.grid_data);
+                    renderMap(data.grid_data, data.state_data);
+                }
             } catch (e) {
                 console.error(e);
-                document.getElementById('status').innerText = "Connection Lost";
             }
         }
 
-        function renderStats(state, grid) {
-            if (!state || !state.player) return;
-            const p = state.player;
-            
-            // Player Panel
-            const html = `
-                <div class="stat-row"><span class="stat-label">Position</span><span class="stat-val">(${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z})</span></div>
-                <div class="stat-row"><span class="stat-label">Heading</span><span class="stat-val">${p.direction ? p.direction.toFixed(1) : 'N/A'}°</span></div>
-                <div class="stat-row"><span class="stat-label">Health</span><span class="stat-val">${p.health ? (p.health * 100).toFixed(0) : 0}%</span></div>
-                <div class="stat-row"><span class="stat-label">Status</span><span class="stat-val">${p.action_state ? p.action_state.status : 'Unknown'}</span></div>
-                <div class="stat-row"><span class="stat-label">Busy?</span><span class="stat-val">${p.is_moving ? 'MOVING' : 'IDLE'}</span></div>
-            `;
-            document.getElementById('playerStats').innerHTML = html;
+        function updatePlayer(p) { if(!p) return; 
+             // ... Simple Vital Update ...
+             const h = p.body ? p.body.health/100 : 0;
+             document.getElementById('vitalsContainer').innerHTML = 
+                `<div class="row">Health: ${(h*100).toFixed(0)}%</div><div class="stat-bar"><div class="stat-fill" style="width:${h*100}%; background:${getHealthColor(h)}"></div></div>`;
+             
+             // ... State ...
+             document.getElementById('stateContainer').innerHTML = `X:${p.position.x.toFixed(1)} Y:${p.position.y.toFixed(1)}`;
 
-            // Entities Panel
-            // Using grid data for consistent "World Model" view, but state has raw zombies
-            const zombies = (state.surroundings && state.surroundings.zombies) ? state.surroundings.zombies.length : 0;
-            const items = (grid && grid.items) ? grid.items.length : 0;
-            const containers = (grid && grid.containers) ? grid.containers.length : 0;
-            
-            // Short list of nearest container
-            let nearCont = "None";
-            if (grid && grid.containers && grid.containers.length > 0) {
-                 // Simple closest logic
-                 nearCont = `${grid.containers.length} visible`;
-            }
+             // ... Moodles ...
+             const moodles = asArray(p.moodles);
+             if (moodles.length > 0) {
+                 document.getElementById('moodlesContainer').innerHTML = moodles.map(m => {
+                     // 1=Good, 2=Bad, 0=Neutral (Approximation)
+                     let bg = '#333';
+                     let border = '#444';
+                     if (m.sentiment === 1) { bg = '#1a3a1a'; border = '#2d5d2d'; } // Good (Greenish)
+                     else if (m.sentiment === 2 || m.sentiment === 4) { bg = '#5a1a1a'; border = '#8d2d2d'; } // Bad (Redish)
+                     
+                     // Visualize Level (1-4)
+                     const pips = "I".repeat(m.value || 1);
+                     
+                     return `<div class="tag" style="background:${bg}; border:1px solid ${border}">${m.name} <span style="opacity:0.6">${pips}</span></div>`
+                 }).join('');
+             } else {
+                 document.getElementById('moodlesContainer').innerHTML = '<span style="color:#666">Calm</span>';
+             }
 
-            const entHtml = `
-                <div class="stat-row"><span class="stat-label">Zombies (Visible)</span><span class="stat-val" style="color: #ff5555">${zombies}</span></div>
-                <div class="stat-row"><span class="stat-label">Items (Memory)</span><span class="stat-val" style="color: #00ffff">${items}</span></div>
-                <div class="stat-row"><span class="stat-label">Containers</span><span class="stat-val" style="color: gold">${containers}</span></div>
-            `;
-            document.getElementById('entityStats').innerHTML = entHtml;
-
-            // Raw JSON (Subset)
-            const debugView = {
-                actions: p.action_state,
-                stats: p.stats,
-                time: state.time
-            };
-            document.getElementById('rawJson').innerText = JSON.stringify(debugView, null, 2);
+             // ... Inventory ...
+             const inv = asArray(p.inventory);
+             if (inv.length > 0) {
+                 document.getElementById('inventoryContainer').innerHTML = inv.map(i => 
+                     renderContainer(i, i.name, '#eee', `<span style="font-size:0.8em; color:#888;">x${i.count||1}</span>`)
+                 ).join('');
+             } else {
+                 document.getElementById('inventoryContainer').innerHTML = '<span style="color:#666">Empty</span>';
+             }
         }
 
-        function renderMap(grid) {
+        function updateEntities(state) { 
+             // 1. Zombies
+             const v = state.player?.vision || {};
+             const zombies = asArray(v.objects).filter(x=>x.type=='Zombie');
+             document.getElementById('zombieCount').innerText = zombies.length;
+             document.getElementById('zombieList').innerHTML = zombies.map(z => 
+                `<div class="item-row" style="color:${COLORS.ZombieLive}">Zombie #${z.id} (${z.x.toFixed(1)},${z.y.toFixed(1)})</div>`
+             ).join('');
+
+             // 2. Containers
+             const containers = asArray(v.nearby_containers);
+             document.getElementById('containerCount').innerText = containers.length;
+             document.getElementById('containerList').innerHTML = containers.map(c => {
+                 // Ensure ID is available for renderContainer if stored in meta
+                 if (!c.id && c.meta && c.meta.parent_id) c.id = c.meta.parent_id;
+                 return renderContainer(c, `${c.object_type} (${c.x},${c.y})`, COLORS.ContainerLive);
+             }).join('');
+
+             // 3. Vehicles
+             const vehicles = asArray(v.vehicles);
+             document.getElementById('vehCount').innerText = vehicles.length;
+             document.getElementById('vehList').innerHTML = vehicles.map(v => {
+                // Break down parts
+                const partsWithContainer = asArray(v.parts).filter(p => p.container || p.items); 
+                let partsHtml = "";
+                if (partsWithContainer.length > 0) {
+                     partsHtml = partsWithContainer.map(p => {
+                         const pName = p.id || p.name || "Part";
+                         // Parts have IDs already? Yes, usually part name.
+                         return renderContainer(p, pName, "#ccc");
+                     }).join('');
+                } else {
+                     partsHtml = `<div style="margin-left:10px; color:#666;">No accessible containers</div>`;
+                }
+                
+                // Vehicle ID Logic
+                let vId = v.id || "??";
+                vId = vId.replace("vehicle_", "");
+
+                return `<div class="item-row" style="border-left: 2px solid ${COLORS.VehicleLive}; padding-left:8px;">
+                    <div style="color:${COLORS.VehicleLive}; font-weight:bold;">${v.object_type || 'Unknown'} [#${vId}] (${v.x.toFixed(1)},${v.y.toFixed(1)})</div>
+                    ${partsHtml}
+                </div>`;
+             }).join('');
+             
+             // 4. Items - Removed as requested
+             // document.getElementById('itemCount').innerText = ...
+             // document.getElementById('itemList').innerHTML = ...
+        }
+
+        function updateMemory(g) {
+             const getTTL = (o) => {
+                 if (o.ttl_remaining_ms) {
+                     const s = Math.ceil(o.ttl_remaining_ms / 1000);
+                     let c = '#4CAF50';
+                     if(s < 10) c='#f44336'; else if(s < 60) c='#FF9800';
+                     return `<span class="tag" style="color:${c}; border-color:${c}33; background:${c}11">TTL:${s}s</span>`;
+                 }
+                 return '';
+             }
+
+             // 1. Zombies
+             const zombies = asArray(g.zombies);
+             document.getElementById('memZombieCount').innerText = zombies.length;
+             document.getElementById('memZombieList').innerHTML = zombies.map(z => 
+                `<div class="item-row" style="color:${COLORS.ZombieMem}">Zombie #${z.id} (${z.x},${z.y}) ${getTTL(z)}</div>`
+             ).join('');
+
+             // 2. Containers
+             const containers = asArray(g.nearby_containers);
+             document.getElementById('memContainerCount').innerText = containers.length;
+             document.getElementById('memContainerList').innerHTML = containers.map(c => {
+                 if (!c.id && c.meta && c.meta.parent_id) c.id = c.meta.parent_id;
+                 return renderContainer(c, `${c.object_type} (${c.x},${c.y})`, COLORS.ContainerMem);
+             }).join('');
+
+             // 3. Vehicles
+             const vehicles = asArray(g.vehicles);
+             document.getElementById('memVehCount').innerText = vehicles.length;
+             document.getElementById('memVehList').innerHTML = vehicles.map(v => {
+                 // Check if memory has full parts or just simplified
+                 const parts = asArray(v.parts || (v.properties ? v.properties.parts : []));
+                 const partsWithContainer = parts.filter(p => p.container || p.items);
+                 let partsHtml = "";
+                 
+                 if (partsWithContainer.length > 0) {
+                     partsHtml = partsWithContainer.map(p => {
+                         const pName = p.id || p.name || "Part";
+                         return renderContainer(p, pName, "#888");
+                     }).join('');
+                 } else {
+                     partsHtml = `<div style="margin-left:10px; color:#555;">No container info</div>`;
+                 }
+                 
+                 let vId = v.id || "??";
+                 vId = vId.replace("vehicle_", "");
+
+                return `<div class="item-row" style="border-left: 2px solid ${COLORS.VehicleMem}; padding-left:8px;">
+                    <div style="color:${COLORS.VehicleMem}; font-weight:bold;">${v.object_type || 'Unknown'} [#${vId}] (${v.x.toFixed(1)},${v.y.toFixed(1)}) ${getTTL(v)}</div>
+                    ${partsHtml}
+                </div>`;
+             }).join('');
+        }
+
+        function updateRaw(s) { document.getElementById('rawJson').innerText = JSON.stringify(s, null, 2); }
+
+        function renderMap(grid, state) {
             if (!grid || !grid.tiles) return;
 
-            const tiles = grid.tiles;
-            const bounds = grid.bounds;
-            if (!bounds) return;
-
-            // Auto-resize
-            const width = (bounds.max_x - bounds.min_x + 1) * TILE_SIZE + (PADDING * 2);
-            const height = (bounds.max_y - bounds.min_y + 1) * TILE_SIZE + (PADDING * 2);
+            // Resize Helper
+            const w = mapContainer.clientWidth;
+            const h = mapContainer.clientHeight;
             
-            if (canvas.width !== width || canvas.height !== height) {
-                canvas.width = width;
-                canvas.height = height;
+            // Resize Offscreen
+            if (offscreenCanvas.width !== w || offscreenCanvas.height !== h) {
+                offscreenCanvas.width = w; offscreenCanvas.height = h;
+            }
+            // Resize Onscreen
+            if (canvas.width !== w || canvas.height !== h) {
+                canvas.width = w; canvas.height = h;
             }
 
-            // Clear
-            ctx.fillStyle = "#000";
-            ctx.fillRect(0, 0, width, height);
+            // Draw to Offscreen --------------------------------------
+            offCtx.fillStyle = "#000"; offCtx.fillRect(0, 0, w, h);
+            
+            let cx = 0, cy = 0;
+            const playerPos = state?.player?.position;
+            
+            if (playerPos) {
+                cx = playerPos.x;
+                cy = playerPos.y;
+            } else {
+                 cx = (grid.bounds?.min_x + grid.bounds?.max_x) / 2 || 0;
+                 cy = (grid.bounds?.min_y + grid.bounds?.max_y) / 2 || 0;
+            }
 
-            const toCanvas = (x, y) => ({
-                x: (x - bounds.min_x) * TILE_SIZE + PADDING,
-                y: (y - bounds.min_y) * TILE_SIZE + PADDING
+            const toScreen = (wx, wy) => ({
+                x: Math.floor((wx - cx) * TILE_SIZE + w/2),
+                y: Math.floor((wy - cy) * TILE_SIZE + h/2)
             });
 
-            // Draw Tiles
-            tiles.forEach(t => {
-                const pos = toCanvas(t.x, t.y);
+            // 1. Tiles
+            const viewRadX = (w / TILE_SIZE) / 2 + 5;
+            const viewRadY = (h / TILE_SIZE) / 2 + 5;
+
+            grid.tiles.forEach(t => {
+                if (Math.abs(t.x - cx) > viewRadX || Math.abs(t.y - cy) > viewRadY) return;
+                const pos = toScreen(t.x, t.y);
+                offCtx.fillStyle = getStringColor(t);
+                offCtx.fillRect(pos.x, pos.y, TILE_SIZE, TILE_SIZE);
+            });
+
+            // Helper for Offscreen
+            const draw = (x, y, col, shape, filled) => {
+                const pos = toScreen(x, y);
+                if (pos.x < -20 || pos.y < -20 || pos.x > w+20 || pos.y > h+20) return;
                 
-                // Color logic
-                if (t.room && t.room !== "outside") ctx.fillStyle = stringToColor(t.room);
-                else {
-                    switch(t.layer) {
-                        case 'Tree': ctx.fillStyle = '#1B5E20'; break;
-                        case 'Vegetation': ctx.fillStyle = '#2E7D32'; break;
-                        case 'Street': ctx.fillStyle = '#444'; break;
-                        case 'Floor': ctx.fillStyle = '#5D4037'; break;
-                        case 'FenceHigh': ctx.fillStyle = '#FF9800'; break;
-                        case 'Wall': ctx.fillStyle = '#B71C1C'; break;
-                        default: ctx.fillStyle = '#388E3C'; // Grass/Default
-                    }
+                offCtx.fillStyle = col; offCtx.strokeStyle = col;
+                const sz = TILE_SIZE * 0.8;
+                const off = (TILE_SIZE - sz)/2;
+                
+                if (shape == 'rect') {
+                    if (filled) offCtx.fillRect(pos.x+off, pos.y+off, sz, sz);
+                    else offCtx.strokeRect(pos.x+off, pos.y+off, sz, sz);
+                } else {
+                    offCtx.beginPath();
+                    offCtx.arc(pos.x + TILE_SIZE/2, pos.y + TILE_SIZE/2, sz/2, 0, 6.28);
+                    if (filled) offCtx.fill(); else offCtx.stroke();
                 }
-                ctx.fillRect(pos.x, pos.y, TILE_SIZE - 1, TILE_SIZE - 1);
-            });
+            };
 
-            // Draw Containers
-            if (grid.containers) {
-                grid.containers.forEach(c => {
-                    const pos = toCanvas(c.x, c.y);
-                    const isVis = c.is_visible !== false;
-                    
-                    ctx.fillStyle = isVis ? "#FFD700" : "#665500";
-                    ctx.beginPath();
-                    ctx.arc(pos.x + TILE_SIZE/2, pos.y + TILE_SIZE/2, TILE_SIZE/2.5, 0, 2 * Math.PI);
-                    ctx.fill();
-                    ctx.strokeStyle = "#000";
-                    ctx.stroke();
-                });
+            // 2. Memory
+            asArray(grid.vehicles).forEach(v => draw(v.x, v.y, COLORS.VehicleMem, 'rect', false));
+            asArray(grid.zombies).forEach(z => draw(z.x, z.y, COLORS.ZombieMem, 'circle', false));
+            asArray(grid.nearby_containers).forEach(c => draw(c.x, c.y, COLORS.ContainerMem, 'rect', false));
+
+            // 3. Live
+            if (state?.player?.vision) {
+                const v = state.player.vision;
+                asArray(v.vehicles).forEach(veh => draw(veh.x, veh.y, COLORS.VehicleLive, 'rect', true));
+                asArray(v.objects).filter(o=>o.type=='Zombie').forEach(z => draw(z.x, z.y, COLORS.ZombieLive, 'circle', true));
+                
+                // Player
+                if (playerPos) draw(playerPos.x, playerPos.y, COLORS.Player, 'circle', true);
             }
 
-            // Draw Items
-            if (grid.items) {
-                grid.items.forEach(i => {
-                    const pos = toCanvas(i.x, i.y);
-                    ctx.fillStyle = "#00FFFF";
-                    ctx.beginPath();
-                    ctx.arc(pos.x + TILE_SIZE/2, pos.y + TILE_SIZE/2, TILE_SIZE/4, 0, 2 * Math.PI);
-                    ctx.fill();
-                });
-            }
+            // Flip Buffer
+            ctx.drawImage(offscreenCanvas, 0, 0);
 
-            // Legend Update
-            const uniqueLayers = [...new Set(tiles.map(t => t.layer).filter(l=>l))];
-            let legendHtml = uniqueLayers.map(l => {
-                let col = '#388E3C';
-                if(l=='Tree') col='#1B5E20';
-                if(l=='Street') col='#444';
-                if(l=='Wall') col='#B71C1C';
-                return `<div class="legend-item"><div class="box" style="background: ${col}"></div> ${l}</div>`;
-            }).join('');
-            legendHtml += `<div class="legend-item"><div class="box" style="background: #FFD700; border-radius: 50%"></div> Container</div>`;
+            // Legend
+             let legendHtml = '';
+            const TILE_KEYS = ['Tree', 'Vegetation', 'Street', 'Floor', 'Wall', 'FenceHigh', 'FenceLow', 'Window', 'Door'];
+            legendHtml += `<div class="legend-section"><div class="legend-title">Tiles</div>`;
+            legendHtml += TILE_KEYS.map(k => `<div class="legend-item"><div class="box" style="background: ${COLORS[k] || COLORS.Default}"></div> ${k}</div>`).join('');
+            legendHtml += `</div><div class="legend-section"><div class="legend-title">Entities</div>`;
+            legendHtml += `<div class="legend-item"><div class="box" style="background: ${COLORS.VehicleLive}"></div> Vehicle</div>`;
+            legendHtml += `<div class="legend-item"><div class="box circle" style="background: ${COLORS.ZombieLive}"></div> Zombie</div>`;
+            legendHtml += `<div class="legend-item"><div class="box" style="background: ${COLORS.ContainerLive}"></div> Container</div>`;
+            legendHtml += `<div class="legend-item"><div class="box" style="background: ${COLORS.ItemLive}"></div> Item</div>`;
+            legendHtml += `<div class="legend-item"><div class="box circle" style="background: ${COLORS.Player}"></div> Player</div>`;
+            legendHtml += `</div>`;
             document.getElementById('legend').innerHTML = legendHtml;
         }
 
-        setInterval(poll, 500);
+        let lastState = null;
+        let lastGrid = null;
+
+        async function poll() {
+            try {
+                const res = await fetch('/data');
+                const data = await res.json();
+                if (data.error) document.getElementById('status').innerText = "Backend Error: " + data.error;
+                
+                if (data.state_data) {
+                    lastState = data.state_data;
+                    const lat = (Date.now() / 1000) - data.timestamp;
+                    document.getElementById('status').innerText = `Tick: ${lastState.tick || 0} | Latency: ${lat.toFixed(3)}s`;
+                    updatePlayer(lastState.player);
+                    updateEntities(lastState);
+                    updateRaw(lastState);
+                }
+                if (data.grid_data && data.grid_data.tiles && data.grid_data.tiles.length > 0) {
+                    // Only update grid if we got valid tiles
+                    lastGrid = data.grid_data;
+                    updateMemory(lastGrid);
+                }
+            } catch (e) {
+                console.error(e);
+            }
+            setTimeout(poll, 700); // Reschedule
+        }
+
+        function animate() {
+            if (lastGrid && lastState) {
+                 renderMap(lastGrid, lastState);
+            }
+            requestAnimationFrame(animate);
+        }
+
+        // Start Loops
         poll();
+        requestAnimationFrame(animate);
     </script>
 </body>
 </html>
-    """
+"""
+
+def update_html():
     with open(HTML_FILE, 'w') as f:
         f.write(html)
     return HTML_FILE
 
 class RequestHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
-        if self.path == '/':
-            self.path = '/debug_view.html'
-            return http.server.SimpleHTTPRequestHandler.do_GET(self)
-        
-        if self.path == '/debug_view.html':
-            return http.server.SimpleHTTPRequestHandler.do_GET(self)
+        if self.path == '/' or self.path == '/debug_view.html':
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            with open(HTML_FILE, 'rb') as f:
+                self.wfile.write(f.read())
+            return
 
         if self.path == '/data':
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            
-            # Read files
+            # Handle data request safely
             response_data = {
                 "timestamp": time.time(),
                 "state_data": {},
                 "grid_data": {}
             }
             
-            # Read State
-            if os.path.exists(STATE_FILE):
-                try:
-                    with open(STATE_FILE, 'r') as f:
-                        response_data["state_data"] = json.load(f)
-                except Exception:
-                    pass
+            try:
+                # Read State
+                # Check standard Lua output location first (Zomboid/Lua/...)
+                # Assuming script is running from Zomboid/pzbot/tools
+                # Path to Zomboid root is ../.. (pzbot/tools -> pzbot -> Zomboid)
+                zomboid_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+                state_path = os.path.join(zomboid_root, 'Lua/AISurvivorBridge/state.json')
+                
+                # Fallback to mod source if not found
+                if not os.path.exists(state_path):
+                     state_path = os.path.join(zomboid_root, 'mods/AISurvivorBridge/common/state.json')
+
+                if os.path.exists(state_path):
+                    # Robust Read with retries
+                    for _ in range(5):
+                        try:
+                            with open(state_path, 'r') as f:
+                                response_data["state_data"] = json.load(f)
+                            break
+                        except:
+                            time.sleep(0.05)
+                
+                # Read Grid Snapshot
+                grid_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'grid_snapshot.json'))
+                if os.path.exists(grid_path):
+                    try:
+                        with open(grid_path, 'r') as f:
+                            response_data["grid_data"] = json.load(f)
+                    except:
+                        pass # Ignore grid errors for now
             
-            # Read Grid Snapshot
-            if os.path.exists(SNAPSHOT_FILE):
-                try:
-                    with open(SNAPSHOT_FILE, 'r') as f:
-                        response_data["grid_data"] = json.load(f)
-                except Exception:
-                    pass
-            
-            self.wfile.write(json.dumps(response_data).encode())
+            except Exception as e:
+                response_data["error"] = str(e)
+
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response_data).encode('utf-8'))
             return
+            
+        return super().do_GET()
 
-        # Default
-        return http.server.SimpleHTTPRequestHandler.do_GET(self)
-
-def main():
-    print(f"Starting PZBot Debugger...")
-    
-    # 1. Clean up old snapshots to ensure we see fresh data
-    if os.path.exists(SNAPSHOT_FILE):
-        try:
-            os.remove(SNAPSHOT_FILE)
-            print(f"Cleared old snapshot: {SNAPSHOT_FILE}")
-        except Exception as e:
-            print(f"Warning: Could not clear snapshot: {e}")
-
-    # 2. Generate HTML
-    generate_html_template()
-    print(f"Generated UI: {HTML_FILE}")
-
-    # 3. Start Server
+if __name__ == '__main__':
+    update_html()
+    print(f"Starting Debug Bot on http://localhost:{PORT}")
     with socketserver.TCPServer(("", PORT), RequestHandler) as httpd:
-        print(f"Serving debug interface at http://localhost:{PORT}")
         webbrowser.open(f"http://localhost:{PORT}")
-        try:
-            httpd.serve_forever()
-        except KeyboardInterrupt:
-            print("\nShutting down.")
-
-if __name__ == "__main__":
-    main()
+        httpd.serve_forever()
