@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional, Set
+from typing import Dict, Any, Optional, Set, List
 from pydantic import BaseModel, Field
 import time
 
@@ -25,6 +25,32 @@ class TileData(BaseModel):
     # Extensible metadata (store anything else here without changing schema)
     meta: Dict[str, Any] = Field(default_factory=dict)
 
+# --- Schema Definitions for Properties ---
+class AnimalProperties(BaseModel):
+    species: str
+    breed: Optional[str] = None
+    age: Optional[int] = None
+    health: Optional[float] = None
+    isFemale: Optional[bool] = None
+    hunger: Optional[float] = 0.0
+    thirst: Optional[float] = 0.0
+    size: Optional[float] = None
+    milking: Optional[bool] = False
+    isPetable: Optional[bool] = False
+    canBePet: Optional[bool] = False
+    canBeAttached: Optional[bool] = False
+
+class ZombieProperties(BaseModel):
+    state: Optional[str] = None
+    worn: List[str] = Field(default_factory=list)
+    weapon: Optional[str] = None
+
+class PlayerProperties(BaseModel):
+    username: Optional[str] = None
+    state: Optional[str] = None
+    worn: List[str] = Field(default_factory=list)
+    weapon: Optional[str] = None
+
 class EntityData(BaseModel):
     """
     Represents a dynamic entity (Zombie, Player, Vehicle) tracked over time.
@@ -42,6 +68,7 @@ class EntityData(BaseModel):
     is_visible: bool = True
     
     # Extensible properties (health, weapons, behavior state)
+    # Ideally validates against specific Property models above where possible
     properties: Dict[str, Any] = Field(default_factory=dict)
 
 class VehicleData(EntityData):

@@ -56,7 +56,19 @@ class EntityMemory(MemoryObject):
     Fast decay.
     """
     def get_ttl(self) -> int:
-        # Zombies/Players move fast. Old position is useless quickly.
+        # Variable TTL based on Entity Type
+        # Handle dict or Pydantic model
+        if isinstance(self.data, dict):
+            dtype = self.data.get('type')
+        else:
+            dtype = getattr(self.data, 'type', None)
+
+        if dtype == 'Player':
+            return 30 * 1000 # 30s for Players (High Value)
+        elif dtype == 'Animal':
+            return 20 * 1000 # 20s for Animals
+            
+        # Default (Zombies)
         return settings.MEMORY_TTL_ZOMBIE
 
     def decay(self, current_time: int) -> bool:

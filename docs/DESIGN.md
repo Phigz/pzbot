@@ -292,21 +292,18 @@ A formal JSON Schema definition that validates character files. This integration
 
 ---
 
-## 7. Development Infrastructure: The Mock Bridge
-To avoid the slow "reload game" loop of Project Zomboid modding, we use a **Mock Bridge** (`pzbot/tools/mock_bridge`) to emulate the game environment.
+## 6. Debugger & Observability
+The bot features a real-time visual debugger (`pzbot/tools/debug_bot.py`) that acts as the primary observability tool.
 
-### 7.1. Purpose
-- **Resilience**: Decouples bot logic development from the game client.
-- **Speed**: Allows instant startup and reproducible scenarios.
-- **Verification**: Enforces schema compliance between the Lua Mod and Python Bot.
+### 6.1. Architecture
+The debugger is split into a minimal Python HTTP server and a modern Web Client:
+- **Server** (`pzbot/tools/debug_bot.py`): Serves static files and exposes `state.json` via `/data` endpoint.
+- **Client** (`pzbot/tools/web/`):
+  - `index.html`: UI scaffolding.
+  - `app.js`: Logic for polling `/data`, rendering the Canvas map, and managing DOM updates.
+  - `style.css`: Dark-themed visual styling.
 
-### 7.2. Architecture
-- **State Factory**: Generates valid `state.json` payloads compliant with `docs/schemas/output_state.json`.
-- **Scenarios**: Pre-defined setups (e.g., `basic`, `surrounded`) that inject entities into the mock world.
-- **Schema Validation**: The mock bridge validates its own output at runtime to ensure it never "lies" to the bot about the API contract.
-
-### 7.3. Testing Strategy
-- **Unit Tests**: `pzbot/tools/mock_bridge/tests` verify that the Mock Bridge follows the schema.
-- **Visual Validation**: Connecting the Mock Bridge to the `visualize_grid.py` tool allows developers to "see" what the bot would see in-game.
-
-
+### 6.2. Visualization Layers
+1.  **Live State**: Renders raw data from `Sensor.lua` (Green=Player, Red=Zombie, Blue=Vehicles).
+2.  **Memory Model**: Renders the bot's internal cache (`MemorySystem`). Visually distinct (faded colors) to verify persistence logic.
+3.  **Semantic Map**: Displays tiles with color codes for Wall, Floor, Window, etc.

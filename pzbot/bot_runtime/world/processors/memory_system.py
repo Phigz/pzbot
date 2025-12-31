@@ -179,9 +179,10 @@ class MemorySystem:
             del collection[eid]
 
     # Getters for Snapshot/Debug
-    def get_zombies(self):
+    # Getters for Snapshot/Debug
+    def get_entities(self):
         with self._lock:
-            return [m.as_dict() for m in self.entities.values() if m.as_dict()['type'] == 'Zombie']
+            return [m.as_dict() for m in self.entities.values()]
     
     def get_known_containers(self):
         with self._lock:

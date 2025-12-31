@@ -75,11 +75,11 @@ def main():
 
                 w_items = [flatten_entity(e) for e in world_model.memory.get_known_items()]
                 n_containers = [flatten_entity(e) for e in world_model.memory.get_known_containers()]
-                known_zombies = [flatten_entity(e) for e in world_model.memory.get_zombies()]
+                known_entities = [flatten_entity(e) for e in world_model.memory.get_entities()]
                 vehicles = [flatten_entity(e) for e in world_model.memory.get_known_vehicles()]
                 
                 grid_data = {
-                    "zombies": known_zombies,
+                    "entities": known_entities,
                     "nearby_containers": n_containers,
                     "world_items": w_items,
                     "vehicles": vehicles

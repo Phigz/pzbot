@@ -47,6 +47,7 @@ handlers["togglecrouch"]  = require("Actions/Handler_ToggleCrouch") -- Alias
 
 handlers["wait"]    = require("Actions/Handler_Wait")
 handlers["sit"]     = require("Actions/Handler_Sit")
+handlers["debug_spawn"] = require("Actions/Handler_DebugSpawn")
 
 -- Returns true if accepted, false if rejected/error.
 function ActionExecutor.execute(action, player)

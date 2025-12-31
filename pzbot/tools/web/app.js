@@ -23,7 +23,12 @@ const COLORS = {
     ZombieLive: '#ff4444', ZombieMem: '#ff8888',
     ContainerLive: '#ffff00', ContainerMem: '#cccc00',
     ItemLive: '#00ffff', ItemMem: '#00aaaa',
-    VehicleLive: '#2196F3', VehicleMem: '#1565C0', Player: '#4CAF50'
+    VehicleLive: '#2196F3', VehicleMem: '#1565C0', Player: '#4CAF50',
+
+    // New Generic Entity Colors
+    PlayerLive: '#00E5FF', PlayerMem: '#00838F', // Cyan for Other Players
+    AnimalLive: '#FFC400', AnimalMem: '#FF6F00', // Amber for Animals
+    GenericLive: '#E0E0E0', GenericMem: '#9E9E9E' // Gray fallback
 };
 
 function getStringColor(t) {
@@ -209,14 +214,65 @@ function updatePlayer(p) {
     }
 }
 
+// Helper: Shared Entity Render Logic
+function renderEntityRow(e, isMemory) {
+    let col = isMemory ? COLORS.GenericMem : COLORS.GenericLive;
+    if (e.type == 'Zombie') col = isMemory ? COLORS.ZombieMem : COLORS.ZombieLive;
+    if (e.type == 'Player') col = isMemory ? COLORS.PlayerMem : COLORS.PlayerLive;
+    if (e.type == 'Animal') col = isMemory ? COLORS.AnimalMem : COLORS.AnimalLive;
+
+    // Normalize Metadata access
+    // Live uses 'meta'. Memory (via grid_snapshot.json) appears to flatten properties into the root object.
+    // We check meta, then properties, and finally fallback to 'e' itself.
+    const meta = e.meta || e.properties || e;
+
+    // Rich Info Builder
+    let info = "";
+
+    // Animal Specific (Schema: AnimalProperties)
+    if (e.type == 'Animal') {
+        const species = meta.species || "Unknown";
+        const breed = meta.breed ? `(${meta.breed})` : "";
+        const gender = meta.isFemale !== undefined ? (meta.isFemale ? "[F]" : "[M]") : "";
+        const age = meta.age !== undefined ? `Age:${meta.age}` : "";
+        const health = meta.health !== undefined ? `HP:${(meta.health * 100).toFixed(0)}%` : "";
+
+        // Interaction Flags
+        let interactions = [];
+        if (meta.canBeAttached) interactions.push("Attachable");
+        if (meta.isPetable || meta.canBePet) interactions.push("Petable");
+        if (meta.milking) interactions.push("Milking");
+        const interactStr = interactions.length > 0 ? ` <span style="color:#ffffcc">[${interactions.join(",")}]</span>` : "";
+
+        info = `${species} ${breed} ${gender} ${age} ${health}${interactStr}`;
+    }
+
+    // Character Specific (Zombie/Player)
+    if (e.type == 'Zombie' || e.type == 'Player') {
+        if (meta.weapon) info += ` <span style="color:#ffcccc">[${meta.weapon}]</span>`;
+        if (meta.worn && meta.worn.length > 0) {
+            info += ` <span style="color:#ccffcc">[${meta.worn.join(", ")}]</span>`;
+        }
+        if (meta.state) info += ` <span style="color:#aaa">{${meta.state}}</span>`;
+    }
+
+    const ttlHtml = isMemory ? getTTL(e) : "";
+    const posStr = `(${e.x.toFixed(1)},${e.y.toFixed(1)})`;
+
+    return `<div class="item-row" style="color:${col}">
+        <strong>${e.type} #${e.id}</strong> 
+        <span style="font-size:0.9em; margin-left:5px;">${info}</span>
+        <span style="float:right; opacity:0.7">${posStr} ${ttlHtml}</span>
+    </div>`;
+}
+
 function updateEntities(state) {
-    // 1. Zombies
+    // 1. Entities (Generic)
     const v = state.player?.vision || {};
-    const zombies = asArray(v.objects).filter(x => x.type == 'Zombie');
-    document.getElementById('zombieCount').innerText = zombies.length;
-    document.getElementById('zombieList').innerHTML = zombies.map(z =>
-        `<div class="item-row" style="color:${COLORS.ZombieLive}">Zombie #${z.id} (${z.x.toFixed(1)},${z.y.toFixed(1)})</div>`
-    ).join('');
+    const entities = asArray(v.objects).filter(x => ['Zombie', 'Player', 'Animal'].includes(x.type));
+
+    document.getElementById('entityCount').innerText = entities.length;
+    document.getElementById('entityList').innerHTML = entities.map(e => renderEntityRow(e, false)).join('');
 
     // 2. Containers
     const containers = asArray(v.nearby_containers);
@@ -260,22 +316,12 @@ function updateEntities(state) {
 }
 
 function updateMemory(g) {
-    const getTTL = (o) => {
-        if (o.ttl_remaining_ms) {
-            const s = Math.ceil(o.ttl_remaining_ms / 1000);
-            let c = '#4CAF50';
-            if (s < 10) c = '#f44336'; else if (s < 60) c = '#FF9800';
-            return `<span class="tag" style="color:${c}; border-color:${c}33; background:${c}11">TTL:${s}s</span>`;
-        }
-        return '';
-    }
+    // 1. Entities
+    // Now provided as "entities" list in grid_snapshot, but fallback to "zombies" for safety
+    const entities = asArray(g.entities || g.zombies);
 
-    // 1. Zombies
-    const zombies = asArray(g.zombies);
-    document.getElementById('memZombieCount').innerText = zombies.length;
-    document.getElementById('memZombieList').innerHTML = zombies.map(z =>
-        `<div class="item-row" style="color:${COLORS.ZombieMem}">Zombie #${z.id} (${z.x},${z.y}) ${getTTL(z)}</div>`
-    ).join('');
+    document.getElementById('memEntityCount').innerText = entities.length;
+    document.getElementById('memEntityList').innerHTML = entities.map(e => renderEntityRow(e, true)).join('');
 
     // 2. Containers
     const containers = asArray(g.nearby_containers);
@@ -382,14 +428,27 @@ function renderMap(grid, state) {
 
     // 2. Memory
     asArray(grid.vehicles).forEach(v => draw(v.x, v.y, COLORS.VehicleMem, 'rect', false));
-    asArray(grid.zombies).forEach(z => draw(z.x, z.y, COLORS.ZombieMem, 'circle', false));
+    asArray(grid.entities || grid.zombies).forEach(e => {
+        let col = COLORS.GenericMem;
+        if (e.type == 'Zombie') col = COLORS.ZombieMem;
+        if (e.type == 'Player') col = COLORS.PlayerMem;
+        if (e.type == 'Animal') col = COLORS.AnimalMem;
+        draw(e.x, e.y, col, 'circle', false);
+    });
     asArray(grid.nearby_containers).forEach(c => draw(c.x, c.y, COLORS.ContainerMem, 'rect', false));
 
     // 3. Live
     if (state?.player?.vision) {
         const v = state.player.vision;
         asArray(v.vehicles).forEach(veh => draw(veh.x, veh.y, COLORS.VehicleLive, 'rect', true));
-        asArray(v.objects).filter(o => o.type == 'Zombie').forEach(z => draw(z.x, z.y, COLORS.ZombieLive, 'circle', true));
+        asArray(v.objects).forEach(o => {
+            let col = null;
+            if (o.type == 'Zombie') col = COLORS.ZombieLive;
+            else if (o.type == 'Player') col = COLORS.PlayerLive;
+            else if (o.type == 'Animal') col = COLORS.AnimalLive;
+
+            if (col) draw(o.x, o.y, col, 'circle', true);
+        });
 
         // Player
         if (playerPos) draw(playerPos.x, playerPos.y, COLORS.Player, 'circle', true);

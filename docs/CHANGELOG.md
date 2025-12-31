@@ -2,7 +2,23 @@
 
 All notable changes to the PZBot project will be documented in this file.
 
-## [Unreleased] - 2025-12-19
+## [0.2.0] - 2025-12-30
+
+### Semantic World Modeling & Entity Intelligence
+- **Entity Schema & Persistence**:
+    - **Unified World Model (`docs/schemas/world_entities.md`)**: Formalized schema separation between "Live" (Observation) and "Memory" (Belief) data.
+    - **Persistence Debugging**: Fixed a major bug where flattened entity memory properties were not being correctly read by the visualizer.
+    - **Codified Models**: Added explicit `AnimalProperties`, `ZombieProperties`, and `PlayerProperties` schemas to Python runtime (`types.py`).
+
+- **Deep Entity Introspection**:
+    - **Animal Data**: Expanded `Sensor.lua` to extract highly detailed Animal metadata:
+        - `Breed`, `Species`, `Age`, `Health`, `Gender`.
+        - `Hunger`, `Thirst`, `Size`.
+        - Interaction Flags: `isPetable`, `canBeAttached`, `isMilking`.
+    - **Backpack Scanning**: Added logic to detect worn containers (Bags/Packs) on Zombies/Players.
+    - **Visual Debugger**: Live and Memory tabs now display full metadata (including interaction flags and health %) consistently.
+
+## [0.1.0] - 2025-12-19
 
 ### Semantic World Modeling
 - **Perception (`Sensor.lua`)**:

@@ -48,38 +48,154 @@ local function getObjectDataForNeighbor(sq)
 end
 
 -- Extract Zombie Data
-local function getZombieInfo(zombie, player)
+-- Extract Generic Actor Data (Zombie, Player, Animal)
+local function getActorInfo(actor, player)
     local meta = {}
-    local dx = zombie:getX() - player:getX()
-    local dy = zombie:getY() - player:getY()
+    local dx = actor:getX() - player:getX()
+    local dy = actor:getY() - player:getY()
     meta.dist = math.sqrt(dx*dx + dy*dy)
     
-    local zState = "IDLE"
-    local target = zombie:getTarget()
+    local typeStr = "Unknown"
+    local idStr = tostring(actor:getID())
     
-    if zombie:isCrawling() then
-        zState = "CRAWLING"
-    elseif zombie:getHitReaction() ~= "" then
-        zState = "STAGGERING" 
-    elseif target == player then
-        zState = "CHASING"
-    elseif target then
-        zState = "ALERTED"
-    elseif zombie:isMoving() then
-        zState = "WANDER"
+    -- 1. ZOMBIE LOGIC
+    if instanceof(actor, "IsoZombie") then
+        typeStr = "Zombie"
+        local zState = "IDLE"
+        local target = actor:getTarget()
+        
+        if actor:isCrawling() then
+            zState = "CRAWLING"
+        elseif actor:getHitReaction() ~= "" then
+            zState = "STAGGERING" 
+        elseif target == player then
+            zState = "CHASING"
+        elseif target then
+            zState = "ALERTED"
+        elseif actor:isMoving() then
+            zState = "WANDER"
+        end
+        
+        if zState == "CHASING" and meta.dist < 1.0 then
+            zState = "ATTACKING"
+        end
+        meta.state = zState
+
+    -- 2. ANIMAL LOGIC (B42 / Generic) - Prioritized over Player
+    elseif instanceof(actor, "IsoAnimal") then
+        typeStr = "Animal"
+        
+        -- Safely extract Breed Name 
+        pcall(function() 
+            local breedObj = actor:getBreed() 
+            if breedObj then
+                 if breedObj.getName then meta.breed = breedObj:getName()
+                 else meta.breed = tostring(breedObj) end
+            end
+        end)
+        
+        -- Extract Species
+        pcall(function() if actor.getAnimalType then meta.species = actor:getAnimalType() end end)
+
+        -- PROBES for Enhanced Stats
+        -- Gender
+        pcall(function() if actor.isFemale then meta.isFemale = actor:isFemale() end end)
+        
+        -- Age / Days Alive
+        pcall(function() if actor.getAge then meta.age = actor:getAge() end end)
+        
+        -- Health usually on BodyDamage or direct getHealth
+        pcall(function() if actor.getHealth then meta.health = actor:getHealth() end end)
+        
+        -- EXPERIMENTAL: Animal Specific Probes (Based on Wiki)
+        pcall(function()
+             -- Size
+             if actor.getSize then meta.size = actor:getSize() end
+             -- Milking
+             if actor.isMilking then meta.milking = actor:isMilking() end
+             -- Interaction / Taming (Guesses)
+             if actor.isPetable then meta.isPetable = actor:isPetable() end
+             if actor.canBePet then meta.canBePet = actor:canBePet() end
+             if actor.canBeAttached then meta.canBeAttached = actor:canBeAttached() end
+             
+             -- Stats (Hunger/Thirst) - Check for direct access first
+             if actor.getHunger then meta.hunger = actor:getHunger() end
+             if actor.getThirst then meta.thirst = actor:getThirst() end
+             
+             -- Stats Object Check
+             if actor.getStats then
+                 local stats = actor:getStats()
+                 if stats then
+                     if stats.getHunger then meta.hunger = stats:getHunger() end
+                     if stats.getThirst then meta.thirst = stats:getThirst() end
+                 end
+             end
+        end)
+        
+        -- 2. Moodles (Standard PZ Needs System)
+        pcall(function()
+            if actor.getMoodles then
+                local moods = actor:getMoodles()
+                if moods then
+                    -- print("[SENSOR-PROBE] Moodles Object: " .. tostring(moods))
+                end
+            end
+        end)
+
+
+
+        -- Debug Print (Can silence later)
+        -- print("[SENSOR-PROBE] Animal Stats: Breed="..tostring(meta.breed).." Spp="..tostring(meta.species).." Fem="..tostring(meta.isFemale).." Age="..tostring(meta.age).." Health="..tostring(meta.health))
+    
+    -- 3. PLAYER LOGIC
+    elseif instanceof(actor, "IsoPlayer") then
+
+        -- Debug Print (Can silence later)
+        -- print("[SENSOR-PROBE] Animal Stats: Breed="..tostring(meta.breed).." Spp="..tostring(meta.species).." Fem="..tostring(meta.isFemale).." Age="..tostring(meta.age).." Health="..tostring(meta.health))
+    
+    -- 3. PLAYER LOGIC
+    elseif instanceof(actor, "IsoPlayer") then
+        typeStr = "Player"
+        meta.username = actor:getUsername()
+        if actor:isAiming() then meta.state = "AIMING" end
     end
     
-    if zState == "CHASING" and meta.dist < 1.0 then
-        zState = "ATTACKING"
+    -- GENERIC CHARACTER LOGIC (Zombies + Players) - Worn Items / Weapons
+    if typeStr == "Zombie" or typeStr == "Player" then
+         -- Weapon Info
+         local hand = actor:getPrimaryHandItem()
+         if hand then meta.weapon = hand:getDisplayName() end
+         
+         -- Worn Items (Backpacks / Bags)
+         pcall(function() 
+             local worn = actor:getWornItems()
+             if worn then
+                 meta.worn = {}
+                 for i=0, worn:size()-1 do
+                     local item = worn:getItemByIndex(i)
+                     if item then
+                         -- Check if it's a container or bag-like
+                         -- checking item:IsInventoryContainer() (Java method often exposed as IsInventoryContainer) or category
+                         local isBag = false
+                         if item.IsInventoryContainer and item:IsInventoryContainer() then isBag = true end
+                         if not isBag and string.find(item:getName(), "Bag") then isBag = true end
+                         if not isBag and string.find(item:getName(), "Pack") then isBag = true end
+                         
+                         if isBag then
+                             table.insert(meta.worn, item:getDisplayName())
+                         end
+                     end
+                 end
+             end
+         end)
     end
 
-    meta.state = zState
     return {
-        id = tostring(zombie:getID()),
-        type = "Zombie",
-        x = math.floor(zombie:getX()),
-        y = math.floor(zombie:getY()),
-        z = math.floor(zombie:getZ()),
+        id = idStr,
+        type = typeStr,
+        x = math.floor(actor:getX()),
+        y = math.floor(actor:getY()),
+        z = math.floor(actor:getZ()),
         meta = meta
     }
 end
@@ -137,41 +253,61 @@ function Sensor.scan(player, gridRadius)
 
     -- 2. DYNAMIC OBJECT SCAN (Global List)
     -- 2. DYNAMIC OBJECT SCAN (Global List)
-    local zombies = getCell():getZombieList()
-    local zCount = 0
+    -- 2. DYNAMIC ACTOR SCAN (Global List)
+    -- We now scan ALL IsoGameCharacters (Zombies, Players) AND IsoAnimals explicitly
+    local allObjects = getCell():getObjectList()
+    local zCount = 0 -- Keep var name for compatibility, effectively "Generic Count"
     vision.debug_z = { total = -1, scan_log = "" }
 
-    if zombies then
-        vision.debug_z.total = zombies:size()
+    if allObjects then
+        vision.debug_z.total = allObjects:size()
         local log_str = ""
 
-        for i=0, zombies:size()-1 do
-            local z = zombies:get(i)
-            -- Correct logic: Trust instanceof for method existence
-            if z and instanceof(z, "IsoZombie") then
-                local dx = z:getX() - player:getX()
-                local dy = z:getY() - player:getY()
-                local dist = math.sqrt(dx*dx + dy*dy)
+        for i=0, allObjects:size()-1 do
+            local obj = allObjects:get(i)
+            
+            -- Filter: Must be Character OR Animal
+            if obj and (instanceof(obj, "IsoGameCharacter") or instanceof(obj, "IsoAnimal")) then
                 
-                if dist <= ZOMBIE_RADIUS then
-                    local zSq = z:getCurrentSquare()
-                    local seen = zSq and zSq:isSeen(playerIndex)
+                -- SELF CHECK LOGGING
+                local isSelf = (obj == player)
+                
+                if not isSelf then
+                    local dx = obj:getX() - player:getX()
+                    local dy = obj:getY() - player:getY()
+                    local dist = math.sqrt(dx*dx + dy*dy)
                     
-                    -- Debug first few
-                    if i < 3 then 
-                         log_str = log_str .. string.format("[ID:%d D:%.1f S:%s] ", z:getID(), dist, tostring(seen))
+                    -- Use ZOMBIE_RADIUS as general "Entity Radius" (50 tiles)
+                    if dist <= ZOMBIE_RADIUS then
+                        local zSq = obj:getCurrentSquare()
+                        local seen = zSq and zSq:isSeen(playerIndex)
+                        
+                        -- BYPASS: Allow Animals even if not seen (for debugging/tracking)
+                        local forceInclude = instanceof(obj, "IsoAnimal")
+                        
+                        if seen or forceInclude then
+                            local info = getActorInfo(obj, player)
+                            print("[SENSOR-ADD] Adding Entity: Type="..tostring(info.type).." ID="..tostring(info.id).." Class="..tostring(obj:getClass():getSimpleName()))
+                            table.insert(vision.objects, info)
+                            zCount = zCount + 1
+                        else
+                             -- DEBUG: Log why Animal wasn't seen
+                             if instanceof(obj, "IsoAnimal") then
+                                 local sqStr = "nil"
+                                 if zSq then sqStr = tostring(zSq:getX())..","..tostring(zSq:getY()) end
+                                 print("[SENSOR-SKIP] Animal skipped. ID:"..tostring(obj:getID()).." Dist:"..tostring(dist).." Sq:"..sqStr.." Seen:"..tostring(seen))
+                             end
+                        end
                     end
-
-                    if seen then
-                        table.insert(vision.objects, getZombieInfo(z, player))
-                        zCount = zCount + 1
-                    end
+                else
+                    -- Log self-skipping to double check logic
+                    -- print("[SENSOR-SKIP] Skipping Self: " .. tostring(obj:getID()))
                 end
             end
         end
         vision.debug_z.scan_log = log_str
     end
-    print(TAG .. "Scan: Global=" .. (zombies and zombies:size() or 0) .. " Visible=" .. zCount)
+    -- print(TAG .. "Scan: Global=" .. (zombies and zombies:size() or 0) .. " Visible=" .. zCount)
 
     -- 3. STATIC GRID SCAN (Tiles & Static Objects)
     -- Iterate grid for map data and static objects (Windows, Doors)
@@ -572,15 +708,15 @@ function Sensor.scan(player, gridRadius)
                 }
 
                 if cData.object_type == "Unknown" then
-                     print("[SENSOR] Unknown Container Dump:")
-                     print("  NameCand: " .. tostring(nameCandidate))
-                     print("  ParentType: " .. tostring(parentType))
-                     print("  ParentID: " .. tostring(parentId))
-                     print("  InventoryType: " .. tostring(invType))
-                     if containerObj and containerObj.getClass then print("  ContainerObj Class: " .. tostring(containerObj:getClass():getSimpleName())) end
-                     if inventory and inventory.getClass then print("  Inventory Class: " .. tostring(inventory:getClass():getSimpleName())) end
-                     if startObj and startObj.getClass then print("  StartObj (Parent) Class: " .. tostring(startObj:getClass():getSimpleName())) end
-                     print("  Chain: " .. debugChain)
+                     -- print("[SENSOR] Unknown Container Dump:")
+                     -- print("  NameCand: " .. tostring(nameCandidate))
+                     -- print("  ParentType: " .. tostring(parentType))
+                     -- print("  ParentID: " .. tostring(parentId))
+                     -- print("  InventoryType: " .. tostring(invType))
+                     -- if containerObj and containerObj.getClass then print("  ContainerObj Class: " .. tostring(containerObj:getClass():getSimpleName())) end
+                     -- if inventory and inventory.getClass then print("  Inventory Class: " .. tostring(inventory:getClass():getSimpleName())) end
+                     -- if startObj and startObj.getClass then print("  StartObj (Parent) Class: " .. tostring(startObj:getClass():getSimpleName())) end
+                     -- print("  Chain: " .. debugChain)
                 end
                 
                 -- Determine type name (Fallback if not item)
