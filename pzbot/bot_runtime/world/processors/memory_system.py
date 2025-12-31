@@ -38,7 +38,14 @@ class MemorySystem:
             
             for c in containers:
                 # Handle Pydantic or Dict for safer access
-                c_data = c.dict() if hasattr(c, 'dict') else (c.model_dump() if hasattr(c, 'model_dump') else c)
+                # Pydantic V2 prefers model_dump
+                if hasattr(c, 'model_dump'):
+                    c_data = c.model_dump()
+                elif hasattr(c, 'dict'):
+                    c_data = c.dict()
+                else:
+                    c_data = c
+
                 otype = c_data.get('object_type')
                 
                 if otype == 'Floor':

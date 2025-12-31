@@ -133,7 +133,13 @@ class GlobalFloorMemory(MemoryObject):
     def update(self, data: Any):
         # Data is a specific Floor tile (Container)
         # Extract items and merge them
-        d = data.dict() if hasattr(data, 'dict') else data
+        if hasattr(data, 'model_dump'):
+            d = data.model_dump()
+        elif hasattr(data, 'dict'):
+            d = data.dict()
+        else:
+            d = data
+
         props = d.get('properties', {})
         items = props.get('items', [])
         

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>PZBot Debugger</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div id="main">
+        <header>
+            <h1>PZBot Debugger</h1>
+            <div id="status">Waiting...</div>
+        </header>
+        <div id="mapContainer">
+            <canvas id="mapCanvas"></canvas>
+            <div class="legend" id="legend"></div>
+        </div>
+    </div>
+
+    <div id="sidebar">
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('player')">Player</div>
+            <div class="tab" onclick="switchTab('entities')">Live</div>
+            <div class="tab" onclick="switchTab('memory')">Memory</div>
+            <div class="tab" onclick="switchTab('raw')">Raw</div>
+        </div>
+
+        <div id="player" class="content-pane active">
+            <div class="section">
+                <h2>Vitals</h2>
+                <div id="vitalsContainer">Waiting...</div>
+            </div>
+            <div class="section">
+                <h2>State</h2>
+                <div id="stateContainer">Waiting...</div>
+            </div>
+            <div class="section">
+                <h2>Moodles</h2>
+                <div id="moodlesContainer">Waiting...</div>
+            </div>
+            <div class="section">
+                <h2>Inventory</h2>
+                <div id="inventoryContainer">Waiting...</div>
+            </div>
+        </div>
+
+        <div id="entities" class="content-pane">
+            <div class="section">
+                <h2>Zombies (<span id="zombieCount">0</span>)</h2>
+                <div id="zombieList"></div>
+            </div>
+            <div class="section">
+                <h2>Containers (<span id="containerCount">0</span>)</h2>
+                <div id="containerList"></div>
+            </div>
+            <div class="section">
+                <h2>Vehicles (<span id="vehCount">0</span>)</h2>
+                <div id="vehList"></div>
+            </div>
+        </div>
+
+        <div id="memory" class="content-pane">
+            <div class="section">
+                <h2>Zombies (<span id="memZombieCount">0</span>)</h2>
+                <div id="memZombieList"></div>
+            </div>
+            <div class="section">
+                <h2>Containers (<span id="memContainerCount">0</span>)</h2>
+                <div id="memContainerList"></div>
+            </div>
+            <div class="section">
+                <h2>Vehicles (<span id="memVehCount">0</span>)</h2>
+                <div id="memVehList"></div>
+            </div>
+        </div>
+
+        <div id="raw" class="content-pane">
+            <div class="section">
+                <h2>Full State JSON</h2>
+                <pre id="rawJson">No Data</pre>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
