@@ -109,20 +109,22 @@ class SpatialGrid:
             if t.room == room_name
         ]
 
-    def save_snapshot(self, path: str, world_items: List = None, nearby_containers: List = None, zombies: List = None):
+    def save_snapshot(self, path: str, additional_data: Dict[str, Any] = None):
         """Serializes the current grid state to a JSON file."""
         data = {
+            "timestamp": time.time(),
             "bounds": {
                 "min_x": self.min_x if self.min_x != float('inf') else 0,
                 "max_x": self.max_x if self.max_x != float('-inf') else 0,
                 "min_y": self.min_y if self.min_y != float('inf') else 0,
                 "max_y": self.max_y if self.max_y != float('-inf') else 0,
             },
-            "tiles": [],
-            "world_items": world_items or [],
-            "nearby_containers": nearby_containers or [],
-            "zombies": zombies or []
+            "tiles": []
         }
+        
+        # Merge external data (entities, signals, etc)
+        if additional_data:
+            data.update(additional_data)
         
         for tile in self._grid.values():
             data["tiles"].append(asdict(tile))
@@ -138,9 +140,14 @@ class SpatialGrid:
                 try: 
                     os.remove(path)
                 except OSError:
-                     pass # Best effort remove on Windows
+                    pass # Best effort remove on Windows
 
             os.replace(temp_path, path)
-            logger.info(f"Grid snapshot saved to {path} ({len(self._grid)} tiles, {len(data['zombies'])} zeds, {len(data['world_items'])} items, {len(data['nearby_containers'])} containers)")
+            
+            # Log summary
+            ent_count = len(data.get('entities', []))
+            sig_count = len(data.get('signals', []))
+            logger.info(f"Grid snapshot saved to {path} ({len(self._grid)} tiles, {ent_count} entities, {sig_count} signals)")
         except Exception as e:
             logger.error(f"Failed to save grid snapshot: {e}")
+

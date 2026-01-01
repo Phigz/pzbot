@@ -81,19 +81,25 @@ The **World Model** is the bot's internal representation of the game state. It a
     - `objects`: Dynamic entries (Zombies, Players) and static interactables (Doors, Windows, Containers).
     - `neighbors`: 3x3 immediate adjacency grid for rapid local avoidance and state checks.
 
-### 3.2. Entity Manager
+### 3.2. Signal & Audio Ingestion
+- **Source**: `signals` array in `state.json`.
+- **Signals**: Radio and TV broadcasts (Message, Power, Channel).
+- **Audio**: Hooks for `WorldSound` events are available but strictly "Last Heard" (Ambiguous Location) is currently disabled to avoid noise.
+- **Purpose**: Allows the bot to locate powered electronics and "Home" locations (safehouses often have radios on).
+
+### 3.3. Entity Manager
 - **Responsibility**: Tracks dynamic actors (Zombies, Players, Items).
 - **ID Matching**: Updates existing entities if ID matches.
 - **Short-Term Memory (Ghosts)**: When an entity leaves vision, it is marked as `is_visible=False` (Ghost).
 - **Decay**: Ghosts are removed after `MEMORY_TTL` (10s for Zombies, 5m for Static objects).
 
-### 3.3. Container Memory
+### 3.4. Container Memory
 - **ContainerMemory**: Persists containers (Crates, Shelves) and their contents.
 - **GlobalFloorMemory**: A singleton container (`Global_Floor`) that aggregates all items found on the floor (from Loot Window or World Scan).
     - **Purpose**: Provides a unified view of "Ground" items without spamming "Floor" containers for every tile.
     - **Persistence**: Items are tracked by ID; if an item disappears from vision (and isn't in 3x3 range), it decays after `MEMORY_TTL_GLOBAL`.
 
-### 3.4. Spatial Grid (Implemented)
+### 3.5. Spatial Grid (Implemented)
 - **Responsibility**: Persistent map of the physical world.
 - **Data Structure**: `SpatialGrid` class using a sparse dictionary of `GridTile` objects.
 - **Features**:

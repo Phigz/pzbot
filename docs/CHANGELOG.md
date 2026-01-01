@@ -2,6 +2,24 @@
 
 All notable changes to the PZBot project will be documented in this file.
 
+## [0.3.0] - 2025-12-31
+
+### Auditory & Signal Perception
+- **Lua Perception Layer**:
+    - **Radio & TV Integration**: Robust probing of `ZomboidRadio` and `DeviceData`.
+    - **Signal Extraction**: Extracts `Channel`, `Volume`, `IsOn`, and broadacst `MediaData` (Message/Title) from nearby devices.
+    - **Performance**: Optimized scanning to avoid crashes with `SafeExtract` protection.
+
+- **Python Memory System**:
+    - **Persistence**: Signals are now treated as persistent memory objects with a 30-second TTL (simulating memory of a broadcast).
+    - **Grid Snapshot Upgrade**: Fixed logic to correctly merge external Entity/Signal data into the `grid_snapshot.json`.
+
+- **Debugger Visualization (v2.0)**:
+    - **Grouped UI**: Live and Memory tabs now grouped by `Zombie`, `Animal`, `Player`, `Interactable`, and `Signal`.
+    - **Signal Visualization**: Audio signals (Radio/TV) visualized as concentric rings (Blue=TV, Green=Radio) with message overlays.
+    - **TTL Indicators**: Visualization of decaying memory for signals and entities.
+    - **Cleanup**: Removed legacy visualization scripts (`visualize_grid.py`, `map_view.html`).
+
 ## [0.2.0] - 2025-12-30
 
 ### Semantic World Modeling & Entity Intelligence

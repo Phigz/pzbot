@@ -110,6 +110,7 @@ class GridSystem:
                     has_data = True
             
         snapshot = {
+            "timestamp": time.time(),
             "tiles": all_tiles,
             "bounds": {
                 "min_x": min_x if has_data else 0,
@@ -149,7 +150,9 @@ class GridSystem:
                 break
 
         if saved:
-            logger.info(f"Saved snapshot with {len(all_tiles)} tiles")
+            ent_count = len(snapshot.get('entities', []))
+            sig_count = len(snapshot.get('signals', []))
+            logger.info(f"Saved snapshot with {len(all_tiles)} tiles, {ent_count} entities, {sig_count} signals")
 
     def _save_chunk_to_disk(self, chunk: GridChunkMemory):
         path = self.data_dir / f"chunk_{chunk.data.chunk_x}_{chunk.data.chunk_y}.json"

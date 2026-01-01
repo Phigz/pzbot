@@ -270,6 +270,76 @@
                                     }
                                 }
                             }
+                        },
+                        "sounds": {
+                            "type": "array",
+                            "description": "Empty in v1. Reserved for future auditory events.",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "type": {
+                                        "type": "string"
+                                    },
+                                    "x": {
+                                        "type": "integer"
+                                    },
+                                    "y": {
+                                        "type": "integer"
+                                    },
+                                    "z": {
+                                        "type": "integer"
+                                    },
+                                    "radius": {
+                                        "type": "number"
+                                    },
+                                    "volume": {
+                                        "type": "number"
+                                    },
+                                    "source": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        },
+                        "signals": {
+                            "type": "array",
+                            "description": "Radio and TV broadcasts detected nearby.",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "Radio",
+                                            "TV"
+                                        ]
+                                    },
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "x": {
+                                        "type": "integer"
+                                    },
+                                    "y": {
+                                        "type": "integer"
+                                    },
+                                    "z": {
+                                        "type": "integer"
+                                    },
+                                    "on": {
+                                        "type": "boolean"
+                                    },
+                                    "channel": {
+                                        "type": "integer"
+                                    },
+                                    "volume": {
+                                        "type": "number"
+                                    },
+                                    "msg": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
                         }
                     }
                 }

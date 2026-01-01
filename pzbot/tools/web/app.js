@@ -267,12 +267,27 @@ function renderEntityRow(e, isMemory) {
 }
 
 function updateEntities(state) {
-    // 1. Entities (Generic)
+    // 1. Grouped Entities
     const v = state.player?.vision || {};
-    const entities = asArray(v.objects).filter(x => ['Zombie', 'Player', 'Animal'].includes(x.type));
+    const objects = asArray(v.objects);
 
-    document.getElementById('entityCount').innerText = entities.length;
-    document.getElementById('entityList').innerHTML = entities.map(e => renderEntityRow(e, false)).join('');
+    const zombies = objects.filter(x => x.type === 'Zombie');
+    const animals = objects.filter(x => x.type === 'Animal');
+    const players = objects.filter(x => x.type === 'Player');
+    const interactables = objects.filter(x => !['Zombie', 'Animal', 'Player'].includes(x.type));
+
+    // Render Lists
+    document.getElementById('zombieCount').innerText = zombies.length;
+    document.getElementById('zombieList').innerHTML = zombies.map(e => renderEntityRow(e, false)).join('');
+
+    document.getElementById('animalCount').innerText = animals.length;
+    document.getElementById('animalList').innerHTML = animals.map(e => renderEntityRow(e, false)).join('');
+
+    document.getElementById('playerCount').innerText = players.length;
+    document.getElementById('playerList').innerHTML = players.map(e => renderEntityRow(e, false)).join('');
+
+    document.getElementById('interactCount').innerText = interactables.length;
+    document.getElementById('interactList').innerHTML = interactables.map(e => renderEntityRow(e, false)).join('');
 
     // 2. Containers
     const containers = asArray(v.nearby_containers);
@@ -310,18 +325,41 @@ function updateEntities(state) {
         </div>`;
     }).join('');
 
-    // 4. Items - Removed as requested
-    // document.getElementById('itemCount').innerText = ...
-    // document.getElementById('itemList').innerHTML = ...
+    // 5. Signals
+    const liveSignals = asArray(v.signals);
+    if (document.getElementById('signalCount')) {
+        document.getElementById('signalCount').innerText = liveSignals.length;
+        document.getElementById('signalList').innerHTML = liveSignals.map(s => {
+            const col = s.type === 'TV' ? '#00AAFF' : '#00FF00';
+            return `<div class="item-row" style="border-left: 3px solid ${col}; padding-left:8px;">
+                        <div style="font-weight: bold; color: #eee;">${s.name || 'Unknown Device'}</div>
+                        <div style="font-size: 0.8em; color: #aaa;">Ch: ${s.channel} | Vol: ${s.volume?.toFixed(1)}</div>
+                        <div style="font-size: 0.9em; color: #fff; margin-top: 2px;">"${s.msg || '...'}"</div>
+                     </div>`;
+        }).join('');
+    }
 }
 
 function updateMemory(g) {
-    // 1. Entities
-    // Now provided as "entities" list in grid_snapshot, but fallback to "zombies" for safety
-    const entities = asArray(g.entities || g.zombies);
+    // 1. Grouped Entities
+    const objects = asArray(g.entities || g.zombies);
 
-    document.getElementById('memEntityCount').innerText = entities.length;
-    document.getElementById('memEntityList').innerHTML = entities.map(e => renderEntityRow(e, true)).join('');
+    const zombies = objects.filter(x => x.type === 'Zombie');
+    const animals = objects.filter(x => x.type === 'Animal');
+    const players = objects.filter(x => x.type === 'Player');
+    const interactables = objects.filter(x => !['Zombie', 'Animal', 'Player'].includes(x.type));
+
+    document.getElementById('memZombieCount').innerText = zombies.length;
+    document.getElementById('memZombieList').innerHTML = zombies.map(e => renderEntityRow(e, true)).join('');
+
+    document.getElementById('memAnimalCount').innerText = animals.length;
+    document.getElementById('memAnimalList').innerHTML = animals.map(e => renderEntityRow(e, true)).join('');
+
+    document.getElementById('memPlayerCount').innerText = players.length;
+    document.getElementById('memPlayerList').innerHTML = players.map(e => renderEntityRow(e, true)).join('');
+
+    document.getElementById('memInteractCount').innerText = interactables.length;
+    document.getElementById('memInteractList').innerHTML = interactables.map(e => renderEntityRow(e, true)).join('');
 
     // 2. Containers
     const containers = asArray(g.nearby_containers);
@@ -357,6 +395,20 @@ function updateMemory(g) {
             ${partsHtml}
         </div>`;
     }).join('');
+
+    // 4. Memory Signals
+    const signals = asArray(g.signals);
+    if (document.getElementById('memSignalCount')) {
+        document.getElementById('memSignalCount').innerText = signals.length;
+        document.getElementById('memSignalList').innerHTML = signals.map(s => {
+            const col = s.type === 'TV' ? '#0077BB' : '#00BB00'; // Darker for memory
+            return `<div class="item-row" style="border-left: 3px solid ${col}; padding-left:8px; opacity: 0.8;">
+                        <div style="font-weight: bold; color: #ccc;">${s.name || 'Unknown Device'}</div>
+                        <div style="font-size: 0.8em; color: #888;">Ch: ${s.channel} ${getTTL(s)}</div>
+                        <div style="font-size: 0.9em; color: #ddd; margin-top: 2px; font-style: italic;">"${s.msg || '...'}"</div>
+                     </div>`;
+        }).join('');
+    }
 }
 
 function updateRaw(s) { document.getElementById('rawJson').innerText = JSON.stringify(s, null, 2); }
@@ -452,6 +504,30 @@ function renderMap(grid, state) {
 
         // Player
         if (playerPos) draw(playerPos.x, playerPos.y, COLORS.Player, 'circle', true);
+
+        // Live Signals
+        asArray(v.signals).forEach(s => {
+            const pos = toScreen(s.x, s.y);
+            const col = s.type === 'TV' ? '#00AAFF' : '#00FF00';
+
+            // Concentric Rings
+            offCtx.strokeStyle = col; offCtx.lineWidth = 2;
+            offCtx.beginPath(); offCtx.arc(pos.x + TILE_SIZE / 2, pos.y + TILE_SIZE / 2, TILE_SIZE, 0, 6.28); offCtx.stroke();
+
+            offCtx.globalAlpha = 0.3;
+            offCtx.beginPath(); offCtx.arc(pos.x + TILE_SIZE / 2, pos.y + TILE_SIZE / 2, TILE_SIZE * 3, 0, 6.28); offCtx.stroke();
+            offCtx.globalAlpha = 1.0;
+        });
+
+        // Live Sounds
+        asArray(v.sounds).forEach(s => {
+            const pos = toScreen(s.x, s.y);
+            offCtx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+            offCtx.lineWidth = 1;
+            offCtx.beginPath();
+            offCtx.arc(pos.x + TILE_SIZE / 2, pos.y + TILE_SIZE / 2, TILE_SIZE * 3, 0, 6.28);
+            offCtx.stroke();
+        });
     }
 
     // Flip Buffer

@@ -200,6 +200,63 @@ local function getActorInfo(actor, player)
     }
 end
 
+-- SIGNAL SENSOR
+-- Scans Radio/TV devices for power, channel, and content
+local function getSignals(player)
+    local signals = {}
+    -- Scan radius for signals (hearing range is roughly 10-20 tiles, but let's go 30)
+    local SCAN_DIST_SQ = 30 * 30 
+    
+    if ZomboidRadio then
+        local radio = ZomboidRadio.getInstance()
+        if radio and radio.getDevices then
+            local devices = radio:getDevices()
+            if devices then
+                for i=0, devices:size()-1 do
+                    local dev = devices:get(i)
+                    if dev then
+                        local dx = dev:getX() - player:getX()
+                        local dy = dev:getY() - player:getY()
+                        
+                        if (dx*dx + dy*dy) <= SCAN_DIST_SQ then
+                             local data = nil
+                             if dev.getDeviceData then data = dev:getDeviceData() end
+                             
+                             if data then
+                                 local isPower = false
+                                 if data.getIsTurnedOn then isPower = data:getIsTurnedOn() end
+                                 
+                                 local lastMsg = nil
+                                 if dev.getSayLine then lastMsg = dev:getSayLine() end
+                                 
+                                 -- Device Type
+                                 local typeName = "Radio"
+                                 if dev.getSprite and dev:getSprite() and dev:getSprite():getName() and string.find(dev:getSprite():getName(), "television") then
+                                     typeName = "TV"
+                                 end
+                                 
+                                 table.insert(signals, {
+                                     x = math.floor(dev:getX()),
+                                     y = math.floor(dev:getY()),
+                                     z = math.floor(dev:getZ()),
+                                     type = typeName,
+                                     name = data:getDeviceName() or "Unknown",
+                                     on = isPower,
+                                     channel = data:getChannel() and data:getChannel() or -1,
+                                     volume = data:getDeviceVolume() and data:getDeviceVolume() or 0.0,
+                                     msg = lastMsg
+                                 })
+                             end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    return signals
+end
+
 -- Scan radius around player
 -- gridRadius: Used for expensive tile/static object scanning (default 10-15)
 -- Zombies are scanned with a fixed long-range radius (50)
@@ -211,7 +268,9 @@ function Sensor.scan(player, gridRadius)
         timestamp = getTimestampMs(),
         tiles = {},   
         objects = {},
-        neighbors = {} 
+        neighbors = {},
+        -- sounds = {}, -- Removed: LastHeard data is ambiguous (Location only)
+        signals = getSignals(player) 
     }
 
     if not player then return vision end
@@ -287,7 +346,7 @@ function Sensor.scan(player, gridRadius)
                         
                         if seen or forceInclude then
                             local info = getActorInfo(obj, player)
-                            print("[SENSOR-ADD] Adding Entity: Type="..tostring(info.type).." ID="..tostring(info.id).." Class="..tostring(obj:getClass():getSimpleName()))
+                            -- print("[SENSOR-ADD] Adding Entity: Type="..tostring(info.type).." ID="..tostring(info.id).." Class="..tostring(obj:getClass():getSimpleName()))
                             table.insert(vision.objects, info)
                             zCount = zCount + 1
                         else
@@ -425,16 +484,73 @@ function Sensor.scan(player, gridRadius)
                         elseif instanceof(obj, "IsoDoor") then
                             objType = "Door"
                             meta.open = obj:IsOpen()
-                        elseif obj:getContainer() then
-                            -- Only verify it's not on a zombie/player (which shouldn't happen in GetObjects normally for the container, but IsZombie checks cover it)
-                            -- Actually IsoZombie extends IsoMovingObject.
-                            -- We just ensure we don't double count if we only care about static containers
+                        elseif instanceof(obj, "IsoContainer") then
+                            -- Only verify it's not on a zombie/player (for safety, though unlikely in static list)
                             if not instanceof(obj, "IsoMovingObject") then
                                 objType = "Container"
                                 meta.cat = obj:getContainer():getType()
                             end
                         end
-                        -- TODO: Add IsoThumpable or other world objects if needed
+                        
+                        -- SIGNAL/DEVICE SCAN (Grid Based)
+                        if instanceof(obj, "IsoTelevision") or instanceof(obj, "IsoRadio") then
+                             local deviceData = nil
+                             if obj.getDeviceData then deviceData = obj:getDeviceData() end
+                             
+                             if deviceData then
+                                 local isPower = false
+                                 if deviceData.getIsTurnedOn then isPower = deviceData:getIsTurnedOn() end
+                                 
+                                 local chan = -1
+                                 if deviceData.getChannel then chan = deviceData:getChannel() end
+                                 
+                                 local vol = 0.0
+                                 if deviceData.getDeviceVolume then vol = deviceData:getDeviceVolume() end
+                                 
+                                 local dName = "Unknown"
+                                 if deviceData.getDeviceName then dName = deviceData:getDeviceName() end
+                                 
+                                 -- Media / VHS Check
+                                 local mediaTitle = nil
+                                 local mediaCat = nil
+                                 if deviceData.hasMedia and deviceData:hasMedia() and deviceData.getMediaData then
+                                     local media = deviceData:getMediaData()
+                                     if media then
+                                         if media.getTitle then mediaTitle = media:getTitle() 
+                                         elseif media.getName then mediaTitle = media:getName() end
+                                         
+                                         if media.getCategory then mediaCat = media:getCategory() end
+                                     end
+                                 end
+                                 
+                                 local sType = "Radio"
+                                 if instanceof(obj, "IsoTelevision") then sType = "TV" end
+                                 
+                                 local deviceMsg = nil
+                                 if mediaTitle then
+                                     deviceMsg = "Media: " .. tostring(mediaTitle)
+                                     if mediaCat then deviceMsg = deviceMsg .. " (" .. tostring(mediaCat) .. ")" end
+                                 end
+
+                                 table.insert(vision.signals, {
+                                     x = x,
+                                     y = y,
+                                     z = pz,
+                                     type = sType,
+                                     name = dName,
+                                     on = isPower,
+                                     channel = chan,
+                                     volume = vol,
+                                     msg = deviceMsg
+                                 })
+                             end
+                        end
+
+                        -- CONTAINER FALLBACK (for objects that have a container but aren't IsoContainer check above)
+                        if not objType and obj:getContainer() and not instanceof(obj, "IsoMovingObject") then
+                             objType = "Container"
+                             meta.cat = obj:getContainer():getType()
+                        end
 
                         if objType then
                             table.insert(vision.objects, {

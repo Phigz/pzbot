@@ -16,6 +16,8 @@ class MemorySystem:
         self.containers: Dict[str, ContainerMemory] = {} # Static containers
         self.vehicles: Dict[str, VehicleMemory] = {}     # Vehicles
         self.world_items: Dict[str, EntityMemory] = {}   # Unused now, but kept for compatibility
+        self.signals: List[Dict] = []                   # Radio/TV Signals (Transient)
+        self.sounds: List[Dict] = []                    # World Sounds (Transient)
 
     def update(self, vision: Any):
         """
@@ -88,6 +90,34 @@ class MemorySystem:
             # 4. Vehicles
             vehicles = getattr(vision, 'vehicles', []) or []
             self._process_list(vehicles, self.vehicles, VehicleMemory, "Vehicle")
+
+            # 5. Signals (Persistent)
+            # Merge new signals with existing memory
+            raw_signals = getattr(vision, 'signals', []) or []
+            current_time = int(time.time() * 1000)
+            
+            # Create map of existing signals for easy lookup (by name/channel)
+            sig_map = {f"{s['name']}_{s['channel']}": s for s in self.signals}
+            
+            for s in raw_signals:
+                d = s.model_dump() if hasattr(s, 'model_dump') else (s.dict() if hasattr(s, 'dict') else s)
+                
+                # Add metadata for persistence
+                d['last_seen'] = current_time
+                d['ttl_remaining_ms'] = 30000 # 30s memory for radio messages
+                
+                # Deduplicate: Overwrite existing
+                key = f"{d['name']}_{d['channel']}"
+                sig_map[key] = d
+                
+            self.signals = list(sig_map.values())
+
+            # 6. Sounds (Transient)
+            raw_sounds = getattr(vision, 'sounds', []) or []
+            self.sounds = []
+            for s in raw_sounds:
+                d = s.model_dump() if hasattr(s, 'model_dump') else (s.dict() if hasattr(s, 'dict') else s)
+                self.sounds.append(d)
 
     def _process_list(self, input_list: List[Any], target_dict: Dict, memory_cls, default_type: str):
         if not input_list: return
@@ -168,6 +198,17 @@ class MemorySystem:
             self._decay_collection(self.containers, current_time)
             self._decay_collection(self.vehicles, current_time)
             self._decay_collection(self.world_items, current_time)
+            
+            # Decay Signals (List of Dicts)
+            fresh_signals = []
+            for s in self.signals:
+                expiration = s.get('last_seen', 0) + s.get('ttl_remaining_ms', 0)
+                # Recalculate remaining TTL based on current time
+                remaining = expiration - current_time
+                if remaining > 0:
+                    s['ttl_remaining_ms'] = remaining
+                    fresh_signals.append(s)
+            self.signals = fresh_signals
 
     def _decay_collection(self, collection: Dict, current_time: int):
         to_remove = []
@@ -195,3 +236,13 @@ class MemorySystem:
     def get_known_vehicles(self):
         with self._lock:
             return [m.as_dict() for m in self.vehicles.values()]
+
+    def get_signals(self):
+        with self._lock:
+            # Signals are now stored as dicts with TTL, return list
+            return self.signals
+
+    def get_sounds(self):
+        with self._lock:
+            return self.sounds
+

@@ -182,6 +182,26 @@ class Vehicle(LogExtraFieldsBase):
             return list(v.values())
         return v
 
+class Signal(LogExtraFieldsBase):
+    type: str # "Radio", "TV"
+    name: str = "Unknown"
+    x: int
+    y: int
+    z: int
+    on: bool = False
+    channel: int = -1
+    volume: float = 0.0
+    msg: Optional[str] = None
+
+class Sound(LogExtraFieldsBase):
+    type: str = "Unknown"
+    x: int
+    y: int
+    z: int
+    radius: int = 0
+    volume: float = 0.0
+    source: str = "Unknown"
+
 class Vision(LogExtraFieldsBase):
     scan_radius: int = 0
     timestamp: int = 0
@@ -191,9 +211,14 @@ class Vision(LogExtraFieldsBase):
     world_items: List[WorldItem] = Field(default_factory=list)
     nearby_containers: List[Container] = Field(default_factory=list)
     neighbors: Dict[str, Any] = Field(default_factory=dict)
+    
+    # New Sensory Channels
+    signals: List[Signal] = Field(default_factory=list)
+    sounds: List[Sound] = Field(default_factory=list)
+    
     debug_z: Optional[Dict[str, Any]] = None
 
-    @field_validator('tiles', 'objects', 'world_items', 'nearby_containers', 'vehicles', mode='before')
+    @field_validator('tiles', 'objects', 'world_items', 'nearby_containers', 'vehicles', 'signals', 'sounds', mode='before')
     @classmethod
     def validate_lists(cls, v, info):
         # Lua output often sends empty dict {} instead of empty list []

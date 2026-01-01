@@ -25,7 +25,7 @@ Utilities to streamline the development and testing loop.
 *   **`launch_pz.bat`**: A single command to kill stale processes, configure launch options, and start the game in debug mode.
 *   **`configure_launch.py`**: Manages launch configurations (New Game vs. Continue).
 *   **`click_start_check.py`**: Automates the "Click to Start" interaction to ensure zero-interaction boot-up.
-*   **`tools/debug_bot.py`**: A unified debugger that visualizes the bot's memory map and monitors real-time state data (player stats, logs) in a web browser.
+*   **`tools/debug_bot.py`**: A unified debugger that visualizes the bot's memory map, live/persistent entities (Zombies, Animals, Players), and auditory signals (Radio/TV bubbles) in a real-time web interface.
 *   **`tools/mock_bridge`**: A standalone emulator that mimics the game's Lua API, allowing for offline testing and rapid iteration of bot logic against specific scenarios (e.g., combat, pathfinding).
 
 ---
@@ -48,6 +48,7 @@ Utilities to streamline the development and testing loop.
 ### Phase 2: Survival Competence
 - [x] **Navigation**: A* Pathfinding integration (Python-side).
 - [x] **Simulation**: Mock Bridge for offline development and testing.
+- [x] **Perception**: Advanced Auditory & Signal System (Radio/TV/Sound).
 - [ ] **Combat Logic**: Basic kiting and melee engagement rules.
 - [ ] **Looting Loop**: Identification of valuable items and inventory management.
 

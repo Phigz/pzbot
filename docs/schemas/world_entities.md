@@ -31,6 +31,23 @@ This document defines the two primary data models used in the bot's world repres
 }
 ```
 
+### Signal Schema (Environmental)
+**Source**: `vision.signals` in `state.json`
+**Context**: "Radio and TV broadcasts detected nearby."
+```json
+{
+  "type": "string",         // "Radio", "TV"
+  "name": "string",         // e.g. "Premium Technologies Radio"
+  "x": "number",
+  "y": "number",
+  "z": "number",
+  "on": "boolean",          // Is powered on
+  "channel": "number",      // Frequency/Channel
+  "volume": "number",       // 0.0 - 1.0
+  "msg": "string"           // Last broadcast message or Media Title (e.g. "Media: Cooking Show")
+}
+```
+
 ---
 
 ## 2. Memory Data (Belief)

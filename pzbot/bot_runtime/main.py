@@ -77,12 +77,16 @@ def main():
                 n_containers = [flatten_entity(e) for e in world_model.memory.get_known_containers()]
                 known_entities = [flatten_entity(e) for e in world_model.memory.get_entities()]
                 vehicles = [flatten_entity(e) for e in world_model.memory.get_known_vehicles()]
+                signals = world_model.memory.get_signals()
+                sounds = world_model.memory.get_sounds()
                 
                 grid_data = {
                     "entities": known_entities,
                     "nearby_containers": n_containers,
                     "world_items": w_items,
-                    "vehicles": vehicles
+                    "vehicles": vehicles,
+                    "signals": signals,
+                    "sounds": sounds
                 }
                 
                 world_model.grid.save_snapshot(str(snapshot_path), grid_data)
