@@ -45,15 +45,36 @@ class PlayerStateFlags(LogExtraFieldsBase):
     read_book: bool = False
     is_driving: bool = False
 
+class Nutrition(LogExtraFieldsBase):
+    calories: float = 0.0
+    weight: float = 0.0
+    carbohydrates: float = 0.0
+    proteins: float = 0.0
+    lipids: float = 0.0
+
 class PlayerBody(LogExtraFieldsBase):
     health: float = 0.0
-    stamina: float = 0.0
+    temperature: float = 0.0
+    
+    # Stats from Java API
+    fatigue: float = 0.0
+    endurance: float = 0.0 # This is 'Stamina'
     hunger: float = 0.0
     thirst: float = 0.0
     stress: float = 0.0
-    fatigue: float = 0.0
     panic: float = 0.0
-    temperature: float = 0.0
+    sanity: float = 0.0
+    boredom: float = 0.0
+    
+    nutrition: Nutrition = Field(default_factory=Nutrition)
+    
+    # Legacy / Derived Properties? 
+    # Current code uses .stamina, we should alias or property it
+    
+    @property
+    def stamina(self) -> float:
+        return self.endurance
+
     is_infected: bool = False
     is_bitten: bool = False
     is_scratched: bool = False

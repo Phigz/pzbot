@@ -39,13 +39,27 @@ def main():
     snapshot_path = config.BASE_DIR / "tools" / "grid_snapshot.json"
 
     # Cleanup previous runtime data
-    for p in [snapshot_path, config.STATE_FILE_PATH]:
-        if p.exists():
-            try:
-                p.unlink()
-                logger.info(f"Cleaned up previous data at {p}")
-            except Exception as e:
-                logger.warning(f"Failed to clean up {p}: {e}")
+    # Logic: If state.json is 'fresh' (modified < 5s ago), assume game is running and don't delete it.
+    # This allows 'Hot Attach' of the bot.
+    if snapshot_path.exists():
+        try:
+            snapshot_path.unlink()
+            logger.info(f"Cleaned up previous data at {snapshot_path}")
+        except Exception as e:
+            logger.warning(f"Failed to clean up {snapshot_path}: {e}")
+
+    state_path = config.STATE_FILE_PATH
+    if state_path.exists():
+        try:
+            mtime = state_path.stat().st_mtime
+            age = time.time() - mtime
+            if age < 5.0:
+                logger.info(f"State file is fresh ({age:.1f}s old). Assuming Hot Attach - preserving file.")
+            else:
+                state_path.unlink()
+                logger.info(f"Cleaned up stale state file at {state_path}")
+        except Exception as e:
+            logger.warning(f"Failed to check/cleanup {state_path}: {e}")
 
     try:
         watcher.start()
@@ -80,13 +94,18 @@ def main():
                 signals = world_model.memory.get_signals()
                 sounds = world_model.memory.get_sounds()
                 
+                # Brain State
+                import dataclasses
+                brain_data = dataclasses.asdict(controller.brain.state)
+                
                 grid_data = {
                     "entities": known_entities,
                     "nearby_containers": n_containers,
                     "world_items": w_items,
                     "vehicles": vehicles,
                     "signals": signals,
-                    "sounds": sounds
+                    "sounds": sounds,
+                    "brain": brain_data
                 }
                 
                 world_model.grid.save_snapshot(str(snapshot_path), grid_data)

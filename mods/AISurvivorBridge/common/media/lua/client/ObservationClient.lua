@@ -69,16 +69,7 @@ function ObservationClient.OnPlayerUpdateObserve(player)
 
     local now = getTimestampMs()
     
-    -- === DEBUG: Inspect Moodles (Run Once) ===
-    if not _G.api_v42_inspected_moodles then
-        print("[INSPECT] Investigating Moodle API...")
-        local moods = player:getMoodles()
-        print("[INSPECT] player:getMoodles() -> " .. tostring(moods))
-        if moods then
-            util.inspectObject(moods, nil) -- Inspect ALL methods on the moodle object
-        end
-        _G.api_v42_inspected_moodles = true
-    end
+
 
     -- 1. Vision Scan (Throttled)
     if (now - lastScanTime) > SCAN_INTERVAL_MS then
@@ -113,17 +104,7 @@ function ObservationClient.OnPlayerUpdateObserve(player)
 
         local bodyDamage = player:getBodyDamage()
         
-        -- DEBUG: Inspect BodyDamage & Thermoregulator (Run Once)
-        if not _G.api_v42_inspected_bodydamage then
-             print("[INSPECT] Investigating BodyDamage API...")
-             util.inspectObject(bodyDamage, nil)
-             
-             if bodyDamage.getThermoregulator then
-                 print("[INSPECT] Investigating Thermoregulator API...")
-                 util.inspectObject(bodyDamage:getThermoregulator(), nil)
-             end
-             _G.api_v42_inspected_bodydamage = true
-        end
+
 
         -- Temperature: Use v42 Thermoregulator API
         local temp = 37.0
@@ -134,11 +115,145 @@ function ObservationClient.OnPlayerUpdateObserve(player)
              end
         end
 
+        -- === STATS & NUTRITION ===
+        local stats = nil
+        if player.getStats then stats = player:getStats() end
+        
+        local nutrition = nil
+        if player.getNutrition then nutrition = player:getNutrition() end
+
+
+        
+        -- Safe Extraction Helpers
+        -- Tries: 1. getMethod(), 2. field
+        local function getStat(obj, propName)
+            if not obj then return 0.0 end
+            
+            -- 1. Try Method: getPropName() (e.g. getFatigue)
+            local method = "get" .. string.upper(string.sub(propName, 1, 1)) .. string.sub(propName, 2)
+            if obj[method] then return obj[method](obj) end
+            
+            -- 2. Try Field: propName (e.g. fatigue)
+            if obj[propName] then return obj[propName] end
+            
+            return 0.0
+        end
+
+        -- Dump Stats to string once per update to parse fields
+        -- (Since direct access to Stats fields fails in Kahlua for this object)
+        local statsStr = ""
+        if stats then statsStr = tostring(stats) end
+        
+        -- Extraction Helper: Parse from String Dump
+        -- Output format: "Stats{ ... Fatigue = 0.0 ... }"
+        local function getVal(propName)
+             -- 1. Try direct map (Performance)
+             -- (If successful in future, we can skip search)
+             
+             -- 2. Parse from String
+             -- Capitalize first letter: fatigue -> Fatigue
+             local capProp = string.upper(string.sub(propName, 1, 1)) .. string.sub(propName, 2)
+             
+             -- Pattern: "Key = Value"
+             -- We look for "Fatigue = 0.123"
+             local pattern = capProp .. "%s*=%s*([%d%.E%-]+)"
+             local match = string.match(statsStr, pattern)
+             
+             if match then
+                 return tonumber(match)
+             end
+             
+             return 0.0
+        end
+
         p.body = {
             health = bodyDamage:getOverallBodyHealth(), 
             temperature = temp,
+            
+            -- Vitals parsed from string dump
+            fatigue = getVal("fatigue"),
+            endurance = getVal("endurance"),
+            hunger = getVal("hunger"),
+            thirst = getVal("thirst"),
+            stress = getVal("stress"),
+            panic = getVal("panic"),
+            sanity = getVal("sanity"),
+            boredom = getVal("boredom"),
+            
+            nutrition = {
+                calories = getStat(nutrition, "calories"),
+                weight = getStat(nutrition, "weight"),
+                carbohydrates = getStat(nutrition, "carbohydrates"),
+                proteins = getStat(nutrition, "proteins"),
+                lipids = getStat(nutrition, "lipids")
+            },
+
             parts = {}
         }
+        
+
+        -- === MOODLES === 
+        p.moodles = {}
+        local moodles = player:getMoodles()
+        local MT = MoodleType -- Confirmed Global text
+        
+        if moodles and MT then
+             -- Dynamic Iteration: Use the keys found in MoodleType
+             for key, val in pairs(MT) do
+                 -- Filter: Look for UPPERCASE keys that aren't system fields
+                 if type(key) == "string" and key == string.upper(key) and string.len(key) > 1 then
+                     
+                     local ok, level = pcall(function() return moodles:getMoodleLevel(val) end)
+                     
+                     if ok and level and level > 0 then
+                        -- Format Name: TRIED -> Tired, HAS_A_COLD -> HasACold
+                        local name = key:lower()
+                        -- Remove underscores and capitalize next letter
+                        name = name:gsub("_(%l)", function(c) return c:upper() end)
+                        -- Capitalize first letter
+                        name = name:gsub("^%l", string.upper)
+                        
+                        -- Sentiment Mapping (-1=Bad, 1=Good, 0=Neutral)
+                        local sentimentMap = {
+                            ENDURANCE = -1,
+                            TIRED = -1,
+                            HUNGRY = -1,
+                            PANIC = -1,
+                            SICK = -1,
+                            BORED = -1,
+                            UNHAPPY = -1,
+                            BLEEDING = -1,
+                            WET = -1,
+                            HAS_A_COLD = -1,
+                            ANGRY = -1,
+                            STRESS = -1,
+                            THIRST = -1,
+                            INJURED = -1,
+                            PAIN = -1,
+                            HEAVY_LOAD = -1,
+                            DRUNK = -1,
+                            DEAD = -1,
+                            ZOMBIE = -1,
+                            HYPERTHERMIA = -1,
+                            HYPOTHERMIA = -1,
+                            WINDCHILL = -1,
+                            CANT_SPRINT = -1,
+                            UNCOMFORTABLE = -1,
+                            NOXIOUS_SMELL = -1,
+                            FOOD_EATEN = 1
+                        }
+                        
+                        local sentiment = sentimentMap[key] or 0
+                        
+                        table.insert(p.moodles, { 
+                           name = name, 
+                           value = level, 
+                           sentiment = sentiment 
+                        })
+                     end
+                 end
+             end
+        end
         
         local bodyParts = bodyDamage:getBodyParts()
         
@@ -167,40 +282,7 @@ function ObservationClient.OnPlayerUpdateObserve(player)
             }
         end
 
-        -- === MOODLES === 
-        p.moodles = {}
-        local moodles = player:getMoodles()
-        if moodles then
-            -- Safe iteration count
-            local count = 0
-            if moodles.getNumMoodles then 
-                 count = moodles:getNumMoodles()
-            elseif moodles.size then 
-                 count = moodles:size() 
-            end
 
-            for i=0, count-1 do
-                local level = moodles:getMoodleLevel(i)
-                if level > 0 then
-                    local typeName = tostring(moodles:getMoodleType(i))
-                    local sentiment = 0
-                    -- 0=Neutral, 1=Good, 2=Bad (Standard PZ Enum usually)
-                    -- Or we can blindly trust the integer
-                    if moodles.getGoodBadNeutral then
-                        sentiment = moodles:getGoodBadNeutral(i)
-                        -- Mapping (Observation required, assuming 1=Good, 2=Bad, 0=Neutral/Info for now)
-                        -- Actually standard is: 0=Good, 1=Bad, 2=Neutral ? Or 1=Good, 2=Bad?
-                        -- We will pass the raw int and handle visualization in debug_bot
-                    end
-                    
-                    table.insert(p.moodles, {
-                        name = typeName,
-                        value = level,
-                        sentiment = sentiment
-                    })
-                end
-            end
-        end
 
         -- === INVENTORY ===
         -- Flattened list for bot simplicity

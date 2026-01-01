@@ -9,7 +9,7 @@ The system consists of three primary components:
 
 ### 1. The Mod (`AISurvivorBridge`)
 Located in `mods/AISurvivorBridge`, this Lua mod runs inside the game engine.
-*   **Perception**: Scans the immediate environment (zombies, player stats, items) and writes structured JSON state to disk.
+*   **Perception**: Scans the immediate environment (zombies, items), reads full player vitals (Hunger, Thirst, Panic), and extracts Moodle states.
 *   **Actuation**: Reads command files (`input.json`) and executes in-game actions (Walk, Run, Attack, Loot, etc.) using the internal game API.
 *   **Automation**: Handles game lifecycle management, including auto-launching new sandbox games for training loops.
 
@@ -41,7 +41,7 @@ Utilities to streamline the development and testing loop.
 ### Phase 1: Foundation (Current)
 - [x] **Bi-directional Communication**: Lua ↔ Python file-based bridge.
 - [x] **Basic Actions**: Movement, looking, sitting, inventory interaction.
-- [x] **State Perception**: Reading health, stats, and nearby zombie positions.
+- [x] **State Perception**: Reading health, full stats (Hunger/Thirst/Fatigue), Moodles, and nearby zombie positions.
 - [x] **Automation**: Fully automated new-game launch sequence.
 - [x] **World Modeling**: Persistent grid memory and map visualization.
 

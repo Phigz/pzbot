@@ -170,14 +170,19 @@ The mod writes perception data to `state.json`.
     "body": {
       "health": 100,
       "temperature": 37.0,
+      "fatigue": 0.0,
+      "hunger": 0.1,
+      "thirst": 0.0,
+      "panic": 0.0,
       "parts": {
         "Hand_L": { "health": 100, "bleeding": false, "bitten": false }
       }
     },
-    "moodles": {},
-    "traits": [],
-    "skills": {},
-    "inventory": {},
+    "moodles": [
+        { "name": "Panic", "value": 1, "sentiment": -1 },
+        { "name": "Hungry", "value": 2, "sentiment": -1 }
+    ],
+    "inventory": [],
     "vision": {
       "scan_radius": 15,
       "tiles": [ { "x": 10909, "y": 9995, "z": 0, "room": "Kitchen" } ],
@@ -312,4 +317,5 @@ The debugger is split into a minimal Python HTTP server and a modern Web Client:
 ### 6.2. Visualization Layers
 1.  **Live State**: Renders raw data from `Sensor.lua` (Green=Player, Red=Zombie, Blue=Vehicles).
 2.  **Memory Model**: Renders the bot's internal cache (`MemorySystem`). Visually distinct (faded colors) to verify persistence logic.
-3.  **Semantic Map**: Displays tiles with color codes for Wall, Floor, Window, etc.
+3.  **Bio & Vitals**: Real-time bars for Health, Hunger, Thirst, Panic, Boredom, and Sanity.
+4.  **Semantic Map**: Displays tiles with color codes for Wall, Floor, Window, etc.

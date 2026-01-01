@@ -152,26 +152,69 @@ function renderContainer(c, label, color, headerSuffix) {
     </div>`;
 }
 
-async function poll() {
-    try {
-        const res = await fetch('/data');
-        const data = await res.json();
-        if (data.error) document.getElementById('status').innerText = "Backend Error: " + data.error;
 
-        if (data.state_data) {
-            const lat = (Date.now() / 1000) - data.timestamp;
-            document.getElementById('status').innerText = `Tick: ${data.state_data.tick || 0} | Latency: ${lat.toFixed(3)}s`;
-            updatePlayer(data.state_data.player);
-            updateEntities(data.state_data);
-            updateRaw(data.state_data);
-        }
-        if (data.grid_data) {
-            updateMemory(data.grid_data);
-            renderMap(data.grid_data, data.state_data);
-        }
-    } catch (e) {
-        console.error(e);
-    }
+
+function updateCortex(brain) {
+    if (!brain) return;
+
+    // 1. Threat Monitor
+    const threat = brain.threat || { global_level: 0, vectors: [] };
+    const tVal = threat.global_level.toFixed(0);
+    document.getElementById('threatLevelBar').style.width = `${Math.min(tVal, 100)}%`;
+    document.getElementById('threatLevelVal').innerText = `${tVal}%`;
+
+    const vectors = asArray(threat.vectors);
+    document.getElementById('threatVectors').innerHTML = vectors.slice(0, 5).map(v => {
+        let cls = "vector-low";
+        if (v.score > 5) cls = "vector-med";
+        if (v.score > 20) cls = "vector-high";
+
+        return `<div class="threat-vector ${cls}">
+            <span>${v.type} #${v.source_id.slice(-4)}</span>
+            <span>${v.score.toFixed(1)}</span>
+        </div>`;
+    }).join('');
+
+    // 2. Needs Hierarchy
+    const needs = brain.needs || { active_needs: [] };
+    // Sort needs by score descending
+    const sortedNeeds = asArray(needs.active_needs).sort((a, b) => b.score - a.score);
+
+    document.getElementById('needsList').innerHTML = sortedNeeds.map(n => {
+        let cls = "low";
+        if (n.score > 40) cls = "medium";
+        if (n.score > 70) cls = "critical";
+
+        return `<div class="need-item">
+            <span class="need-name">${n.name}</span>
+            <div class="need-bar-bg">
+                <div class="need-bar-fill ${cls}" style="width:${Math.min(n.score, 100)}%"></div>
+            </div>
+        </div>`;
+    }).join('');
+
+    // 3. Thought Stream
+    const thoughts = asArray(brain.thoughts);
+    // Reverse needed because flux stores newest at end, but we want newest at top?
+    // Actually CSS column-reverse handles visual bottom-anchoring.
+    // HTML order: Top of list = Top of container. 
+    // column-reverse makes Last Child appear at Top? No, Bottom.
+    // We want a standard chat log: Newest at bottom.
+    // But we are re-rendering innerHTML every tick.
+    // Let's just map them.
+
+    document.getElementById('thoughtLog').innerHTML = thoughts.slice(-20).map(t => {
+        const timeStr = new Date(t.timestamp * 1000).toLocaleTimeString();
+        return `<div class="log-entry">
+            <span class="log-time">[${timeStr}]</span>
+            <span class="log-tag ${t.category}">${t.category}</span>
+            <span class="log-msg">${t.message}</span>
+        </div>`;
+    }).join('');
+
+    // Auto-scroll to bottom
+    const logDiv = document.getElementById('thoughtLog');
+    logDiv.scrollTop = logDiv.scrollHeight;
 }
 
 function updatePlayer(p) {
@@ -181,7 +224,50 @@ function updatePlayer(p) {
     document.getElementById('vitalsContainer').innerHTML =
         `<div class="row">Health: ${(h * 100).toFixed(0)}%</div><div class="stat-bar"><div class="stat-fill" style="width:${h * 100}%; background:${getHealthColor(h)}"></div></div>`;
 
-    // ... State ...
+    // ... Bio & Nutrition ...
+    if (p.body) {
+        const b = p.body;
+        const nut = b.nutrition || {};
+
+        // Helper for simple bars
+        const renderBar = (label, val, color) => {
+            // val is 0-1
+            const pct = Math.min(Math.max(val, 0), 1) * 100;
+            return `<div class="row" style="font-size:0.9em; margin-top:4px;">
+                <span style="flex:1">${label}</span>
+                <span style="font-weight:bold">${pct.toFixed(0)}%</span>
+             </div>
+             <div class="stat-bar" style="height:6px;"><div class="stat-fill" style="width:${pct}%; background:${color}"></div></div>`;
+        };
+
+        let bioHtml = "";
+        bioHtml += renderBar("Endurance", b.endurance, "#4CAF50");
+        bioHtml += renderBar("Fatigue", b.fatigue, "#FF9800");
+        bioHtml += renderBar("Stress", b.stress, "#E91E63");
+        bioHtml += renderBar("Hunger", b.hunger, "#FF5722");
+        bioHtml += renderBar("Thirst", b.thirst, "#2196F3");
+        bioHtml += renderBar("Panic", (b.panic || 0) / 100, "#9C27B0");
+        bioHtml += renderBar("Boredom", b.boredom, "#9E9E9E");
+        bioHtml += renderBar("Sanity", 1.0 - (b.sanity || 1.0), "#00BCD4"); // 1=Sane, 0=Insane? Or inverted?
+        // Lua sanity: 1.0 = Sanity (Full), 0.0 = Insane? 
+        // Usually bars show "Problem level". Fatigue 1.0 = Tired.
+        // If Sanity 1.0 = Good, we might want to invert for "Insanity" bar?
+        // Let's assume Sanity 1.0 is Good. So "Insanity" = 1 - Sanity.
+
+
+        // Nutrition Data
+        if (nut.weight) {
+            bioHtml += `<div style="margin-top:10px; border-top:1px solid #444; padding-top:5px; font-size:0.85em; color:#ddd">
+                <div>Weight: <span style="color:#fff">${nut.weight.toFixed(1)}</span></div>
+                <div>Calories: <span style="color:#fff">${nut.calories.toFixed(0)}</span></div>
+                <div style="color:#aaa; font-size:0.8em">
+                   Carbs: ${nut.carbohydrates?.toFixed(2)} | Pro: ${nut.proteins?.toFixed(2)} | Fat: ${nut.lipids?.toFixed(2)}
+                </div>
+             </div>`;
+        }
+
+        document.getElementById('bioContainer').innerHTML = bioHtml;
+    }
     document.getElementById('stateContainer').innerHTML = `X:${p.position.x.toFixed(1)} Y:${p.position.y.toFixed(1)}`;
 
     // ... Moodles ...
@@ -192,7 +278,7 @@ function updatePlayer(p) {
             let bg = '#333';
             let border = '#444';
             if (m.sentiment === 1) { bg = '#1a3a1a'; border = '#2d5d2d'; } // Good (Greenish)
-            else if (m.sentiment === 2 || m.sentiment === 4) { bg = '#5a1a1a'; border = '#8d2d2d'; } // Bad (Redish)
+            else if (m.sentiment === -1) { bg = '#5a1a1a'; border = '#8d2d2d'; } // Bad (Redish)
 
             // Visualize Level (1-4)
             const pips = "I".repeat(m.value || 1);
@@ -565,11 +651,17 @@ async function poll() {
             updateEntities(lastState);
             updateRaw(lastState);
         }
-        if (data.grid_data && data.grid_data.tiles && data.grid_data.tiles.length > 0) {
-            // Only update grid if we got valid tiles
-            lastGrid = data.grid_data;
-            updateMemory(lastGrid);
+
+        if (data.grid_data) {
+            if (data.grid_data.tiles && data.grid_data.tiles.length > 0) {
+                lastGrid = data.grid_data;
+                updateMemory(lastGrid);
+            }
+            if (data.grid_data.brain) {
+                updateCortex(data.grid_data.brain);
+            }
         }
+
     } catch (e) {
         console.error(e);
     }
