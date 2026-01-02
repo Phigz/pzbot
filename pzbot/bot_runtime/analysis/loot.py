@@ -166,14 +166,14 @@ class LootAnalyzer(BaseAnalyzer):
                  else: base_val = 1.0 # Scrap
         
         # 3.5 Apply Base Multipliers (Configured Importance)
-         # These apply to ALL items with the tag, allowing general tuning
-         base_mults = self.config.get('base_multipliers', {})
-         for t in tags:
-             if t in base_mults:
-                 base_val *= float(base_mults[t])
+        # These apply to ALL items with the tag, allowing general tuning
+        base_mults = self.config.get('base_multipliers', {})
+        for t in tags:
+            if t in base_mults:
+                base_val *= float(base_mults[t])
 
-         # 4. Apply Dynamic Multipliers (Context/Needs)
-         final_val = base_val * mults.get("Global", 1.0)
+        # 4. Apply Dynamic Multipliers (Context/Needs)
+        final_val = base_val * mults.get("Global", 1.0)
         
         for t in tags:
             if t in mults:

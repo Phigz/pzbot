@@ -154,7 +154,7 @@ function renderContainer(c, label, color, headerSuffix) {
 
 
 
-function updateCortex(brain) {
+function updateBrainState(brain) {
     if (!brain) return;
 
     // 1. Situation Mode
@@ -170,9 +170,22 @@ function updateCortex(brain) {
     if (modeStr === 'OPPORTUNITY') sitColor = "#FFD700";
     if (modeStr === 'MAINTENANCE') sitColor = "#2196F3";
 
+    // Format Proposed Action
+    let proposal = "";
+    if (brain.proposed_actions && brain.proposed_actions.length > 0) {
+        const act = brain.proposed_actions[0];
+        proposal = `<span style="color:#aaf;"> > ${act.type}</span>`;
+        if (act.type === 'MoveTo') {
+            proposal += ` <span style="font-size:0.8em">(${act.params.x.toFixed(0)}, ${act.params.y.toFixed(0)})</span>`;
+        }
+    }
+
     document.getElementById('situationContainer').innerHTML = `
         <div style="color:${sitColor}; font-size: 1.4em;">${modeStr}</div>
         <div style="font-size:0.8em; color:#888; margin-top:5px;">Driver: ${sit.primary_driver}</div>
+        <div style="font-size:1.0em; color:#fff; margin-top:10px;">
+            Strategy: <strong>${brain.active_strategy_name || "Init"}</strong> ${proposal}
+        </div>
     `;
 
     // 2. Environment
@@ -743,6 +756,10 @@ async function poll() {
             updateRaw(lastState);
         }
 
+        if (lastState && lastState.brain) {
+            updateBrainState(lastState.brain);
+        }
+
         if (data.grid_data) {
             if (data.grid_data.tiles && data.grid_data.tiles.length > 0) {
                 lastGrid = data.grid_data;
@@ -758,6 +775,20 @@ async function poll() {
     }
     setTimeout(poll, 700); // Reschedule
 }
+
+const REFRESH_RATE = 200; // 5Hz UI Refresh
+
+// Toggle Autopilot
+document.getElementById('autopilotToggle').addEventListener('change', function (e) {
+    const isChecked = e.target.checked;
+    console.log("Autopilot toggled:", isChecked);
+
+    fetch('/control', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ autopilot: isChecked })
+    }).catch(err => console.error("Control failed:", err));
+});
 
 function animate() {
     if (lastGrid && lastState) {

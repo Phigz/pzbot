@@ -67,6 +67,34 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
         # Serve Static Files (CSS, JS, HTML) via parent class
         return super().do_GET()
 
+    def do_POST(self):
+        if self.path == '/control':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            
+            try:
+                data = json.loads(post_data.decode('utf-8'))
+                print(f"Received Control: {data}")
+                
+                # Write to shared control file
+                zomboid_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+                control_path = os.path.join(zomboid_root, 'pzbot/config/runtime_control.json')
+                
+                # Write atomically
+                with open(control_path, 'w') as f:
+                    json.dump(data, f)
+                    
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b'{"status":"ok"}')
+            except Exception as e:
+                print(f"Control Error: {e}")
+                self.send_response(500)
+                self.end_headers()
+        else:
+            self.send_response(404)
+            self.end_headers()
+
 if __name__ == '__main__':
     print(f"Starting Debug Bot on http://localhost:{PORT}")
     print(f"Serving UI from {WEB_DIR}")

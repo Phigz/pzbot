@@ -1,5 +1,8 @@
 import logging
+import json
+import os
 from typing import Optional
+from bot_runtime import config as bot_config
 from bot_runtime.ingest.state import GameState
 from bot_runtime.world.model import WorldModel
 from bot_runtime.control.action_queue import ActionQueue
@@ -12,6 +15,11 @@ from bot_runtime.brain.brain import Brain
 
 logger = logging.getLogger(__name__)
 
+from bot_runtime.strategy.decision_engine import DecisionEngine
+from bot_runtime.strategy.implementations.idle import IdleStrategy
+from bot_runtime.strategy.implementations.survival import SurvivalStrategy
+from bot_runtime.strategy.implementations.loot import LootStrategy
+
 class BotController:
     def __init__(self, world_model: WorldModel, action_queue: ActionQueue, input_writer: InputWriter):
         self.world_model = world_model
@@ -22,6 +30,12 @@ class BotController:
         
         # Initialize The Brain
         self.brain = Brain(self.world_model)
+        
+        # Initialize Strategy Layer
+        self.decision_engine = DecisionEngine(self.action_queue)
+        self.decision_engine.register_strategy(IdleStrategy())
+        self.decision_engine.register_strategy(SurvivalStrategy())
+        self.decision_engine.register_strategy(LootStrategy())
 
     def on_tick(self, game_state: GameState):
         """Called whenever a new game state is received."""
@@ -30,13 +44,16 @@ class BotController:
 
         # 2. Update Brain (Analysis)
         self.brain.update()
+        
+        # 3. Decision Making (Strategy Selection)
+        self.decision_engine.decide(self.brain.state)
 
-        # 3. Log World Status
+        # 4. Log World Status
         self.world_logger.update()
         
-        # 4. Log Brain Activity (Throttle to every ~2s / 20 ticks)
+        # 5. Log Brain Activity (Throttle to every ~2s / 20 ticks)
+        b = self.brain.state
         if self.world_model.tick_count % 20 == 0:
-            b = self.brain.state
             
             # Threat
             t_lvl = b.threat.global_level
@@ -61,9 +78,29 @@ class BotController:
                 
                 logger.info(f"[VITALS] HP:{hp*100:.0f}% Stamina:{stam*100:.0f}% Hunger:{hung*100:.0f}% Thirst:{thirst*100:.0f}%")
 
-        # 5. Flush Action Queue to Input Writer
-        # DISABLED for World Model building phase - Pure Observer Mode
-        # if self.action_queue.has_actions():
-        #     actions = self.action_queue.pop_all()
-        #     logger.info(f"Flushing {len(actions)} actions.")
-        #     self.input_writer.write_actions(actions)
+        # 6. Flush Action Queue
+        actions = []
+        if self.action_queue.has_actions():
+             actions = self.action_queue.pop_all()
+             
+             # Visualize Intent (Always)
+             b.proposed_actions = actions
+        
+        # Check Control Config
+        autopilot = False
+        try:
+            ctl_path = bot_config.BASE_DIR / "config" / "runtime_control.json"
+            if ctl_path.exists():
+                with open(ctl_path, 'r') as f:
+                    data = json.load(f)
+                    autopilot = data.get("autopilot", False)
+        except Exception:
+            pass
+
+        # Write to File ONLY if Autopilot is enabled
+        if actions and autopilot:
+             # logger.info(f"Autopilot Executing {len(actions)} actions.")
+             self.input_writer.write_actions(actions)
+        elif actions:
+             # logger.debug("Shadow Mode: Actions proposed but inhibited.")
+             pass

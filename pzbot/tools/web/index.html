@@ -10,6 +10,14 @@
     <div id="main">
         <header>
             <h1>PZBot Debugger</h1>
+            <div class="header-right">
+                <span id="connectionStatus" class="status-disconnected">Disconnected</span>
+                <label class="switch-container">
+                    <input type="checkbox" id="autopilotToggle">
+                    <span class="slider round"></span>
+                    <span class="switch-label">Autopilot</span>
+                </label>
+            </div>
             <div id="status">Waiting...</div>
         </header>
         <div id="mapContainer">
@@ -21,7 +29,7 @@
     <div id="sidebar">
         <div class="tabs">
             <div class="tab active" onclick="switchTab('player')">Player</div>
-            <div class="tab" onclick="switchTab('cortex')">Cortex</div>
+            <div class="tab" onclick="switchTab('cortex')">Brain State</div>
             <div class="tab" onclick="switchTab('entities')">Live</div>
             <div class="tab" onclick="switchTab('memory')">Memory</div>
             <div class="tab" onclick="switchTab('raw')">Raw</div>
@@ -51,6 +59,7 @@
                     <div class="meter-header">
                         <span class="label">GLOBAL THREAT</span>
                         <span id="threatLevelVal" class="brain-value">0%</span>
+
                     </div>
                     <div class="brain-bar">
                         <div id="threatLevelBar" class="brain-fill red" style="width: 0%"></div>

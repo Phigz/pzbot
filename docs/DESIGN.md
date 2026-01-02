@@ -123,6 +123,15 @@ The **World Model** is the bot's internal representation of the game state. It a
 - **Heuristic**: Euclidean distance to target.
 - **Cost Function**: Checks `SpatialGrid.is_walkable` (checks `w`, `n`, `e`, `s` collision flags).
 
+### 3.6. Strategy Layer (Implemented)
+- **Role**: The "Decision Engine". Tier 3 of the brain.
+- **Input**: `BrainState` (Needs, Threat, Useable Items, Situation).
+- **Mechanism**: Warning/Opportunity/Survival strategies bid for control based on a utility score (0-100).
+- **Shadow Mode (Autopilot)**:
+    - The bot runs logic and proposes actions into the `BrainState`.
+    - These actions are visualized in the debugger (`> MoveTo`) but NOT executed unless the "Autopilot" toggle is ON.
+    - Allows for safe development and "Human-in-the-loop" verification.
+
 ---
 
 ## 4. API Reference

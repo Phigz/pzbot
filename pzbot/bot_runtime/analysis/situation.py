@@ -57,8 +57,17 @@ class SituationAnalyzer:
                 return state
 
         # 3. OPPORTUNITY (Looting / Exploring)
-        # If safe and valuable loot nearby
-        if threat.global_level < 15.0:
+        # If safe and valuable loot nearby OR if we *Need* equipment (Preparedness)
+        prep = get_need("PREPAREDNESS")
+        
+        if threat.global_level < 20.0: # Moderate safety required for opportunistic behavior
+            # High Preparedness Drive (Need Weapon/Clothes)
+            if prep > 50.0:
+                 state.current_mode = SituationMode.OPPORTUNITY
+                 state.primary_driver = "Need Equipment"
+                 return state
+
+            # Standard Shiny Thing Syndrome
             if loot.zone_value > 50.0:
                 state.current_mode = SituationMode.OPPORTUNITY
                 state.primary_driver = "Good Loot"

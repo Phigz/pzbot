@@ -79,6 +79,46 @@ class NeedAnalyzer(BaseAnalyzer):
 
         state.active_needs.append(Need("MEDICAL", medical_score, {"issues": medical_meta}))
 
+        # --- 3. Preparedness Needs (Equipment) ---
+        # Default drive to acquire essentials if we lack them.
+        prep_score = 0.0
+        prep_meta = []
+        
+        # Check Weapon
+        # Assuming memory.player.inventory has 'equipped' or we check stats?
+        # For now, simplistic: Do we have *any* weapon? 
+        # (LootState calculates 'best_weapon', we can verify against that or just check if we are holding one)
+        # We need a proper inventory model in Brain or World Model.
+        # Temp: Assume if we have no weapon in hand -> Need Weapon.
+        # Note: We need to pull this from 'state.json' -> 'player' -> 'equipped'
+        # Currently PlayerBody doesn't have 'equipped'. We need to check schema.
+        # Fallback: Just check if we are "Fresh" (Time survived < X)?
+        # Better: Assume we need loot until we decide we are "equipped".
+        # Let's add a baseline "Gathering" need that decays over time? No.
+        
+        # For this iteration, let's look at LootState!
+        # If we see a "Weapon" and we don't have one, that's Opportunity.
+        # But 'Needs' drives the Situation.
+        
+        # Let's add a static "Scavenge" drive that is inversely proportional to our 'Preparedness'.
+        # Preparedness = (HasWeapon * 50) + (HasClothing * 50)
+        # Since we can't easily check HasClothing yet (body parts covered?), we'll stick to Weapon.
+        
+        # Checking if we have a weapon is tricky without updated schema.
+        # Let's add independent "EXPLORE" drive?
+        # Let's add a "LOOTING" need that is always 20.0 (Low background drive).
+        # And boosts to 80.0 if we have NO weapon.
+        
+        # Placeholder for Weapon Check (requires Inventory Module update)
+        has_weapon = False 
+        # TODO: wire up inventory check.
+        
+        if not has_weapon:
+            prep_score = max(prep_score, 60.0)
+            prep_meta.append("Find Weapon")
+            
+        state.active_needs.append(Need("PREPAREDNESS", prep_score, {"issues": prep_meta}))
+
         # --- 3. Sorting ---
         state.active_needs.sort(key=lambda n: n.score, reverse=True)
         return state

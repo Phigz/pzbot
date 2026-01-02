@@ -52,7 +52,10 @@ Utilities to streamline the development and testing loop.
 - [ ] **Combat Logic**: Basic kiting and melee engagement rules.
 - [ ] **Looting Loop**: Identification of valuable items and inventory management.
 
-### Phase 3: Advanced Intelligence
+### Phase 3: Advanced Intelligence (In Progress)
+- [x] **Strategy Layer**: Modular decision engine (`Survival`, `Loot`, `Idle` strategies).
+- [x] **Shadow Mode**: Debugger visualizes intended actions without executing ("Autopilot" toggle).
+- [x] **Preparedness Logic**: Needs system now drives initial looting behaviors (Equipment seeking).
 - [ ] **LLM Integration**: Connecting to Large Language Models for high-level goal planning (e.g., "Secure a base").
 - [ ] **Visual Perception**: (Experimental) Using direct screen capture for vision-based inputs.
 - [ ] **Memory**: Implementation of long-term memory for map knowledge and safehouse tracking.

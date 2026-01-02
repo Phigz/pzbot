@@ -26,7 +26,16 @@ This document describes the structure of the JSON payload sent from the Lua Mod 
 | `inventory` | `List[Item]` | Items in the main inventory. |
 | `action_state`| `ActionState` | Status of the current action being executed. |
 
-### 1.1 Body (`PlayerBody`)
+### 1.1 ActionState
+Tracks the progress of the current action (if any).
+| Field | Type | Description |
+|---|---|---|
+| `status` | `string` | "idle", "active", "complete", "failed". |
+| `current_action_id` | `string` | UUID of the executing action. |
+| `current_action_type`| `string` | Debug text (e.g. "WalkTo"). |
+| `queue_busy` | `bool` | True if internal action queue is processing. |
+
+### 1.2 Body (`PlayerBody`)
 | Field | Type | Description |
 |---|---|---|
 | `health` | `float` | 0.0 - 1.0 (Dead - Full) |

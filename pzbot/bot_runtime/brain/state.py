@@ -106,3 +106,5 @@ class BrainState:
     thoughts: List[Thought] = field(default_factory=list)
     active_thought: Optional[Thought] = None # The thought generated THIS tick, if any.
     intent: Optional[str] = None # Description of current high-level goal
+    active_strategy_name: str = "Init" # The name of the currently running strategy
+    proposed_actions: List[Dict] = field(default_factory=list) # Actions the strategy WANTS to execute
