@@ -1,0 +1,97 @@
+# Loot Valuation Configuration
+
+# Global Multipliers based on Context
+multipliers:
+  hunger_high: 2.0      # Applied to 'Food' when Hunger > 50
+  hunger_critical: 5.0  # Applied to 'Food' when Hunger > 80
+  thirst_high: 2.0      # Applied to 'Water' when Thirst > 50
+  medical_critical: 10.0 # Applied to 'Medical' when Bleeding/Bitten
+  
+  personality_greed: 0.5 # Added to base value of EVERYTHING if Greed is 1.0 (Value * (1 + Greed))
+
+# Base Multipliers (Applied to ALL items with these tags, regardless of source)
+# This allows general tuning (e.g. Weapons always 1.5x)
+base_multipliers:
+  "Weapon": 1.5
+  "Medical": 1.2
+  "Tool": 1.0
+  "Food": 1.0
+  "Resource": 0.8
+
+# Category Defaults (if item not found in Specific Items)
+categories:
+  "Food":
+    value: 15
+    tags: ["Food"]
+  "Weapon":
+    value: 40
+    tags: ["Weapon"]
+  "Clothing":
+    value: 5
+    tags: ["Clothing"]
+  "Literature":
+    value: 0  # Generally useless unless specified (e.g. Skill Books)
+    tags: ["Literature"]
+  "Medical":
+    value: 40
+    tags: ["Medical"]
+
+# Specific Item Overrides
+items:
+  # === WEAPONS ===
+  "Base.Shotgun":
+    value: 120
+    tags: ["Weapon", "Ranged", "Gun"]
+  "Base.Pistol":
+    value: 90
+    tags: ["Weapon", "Ranged", "Gun"]
+  "Base.Axe":
+    value: 100
+    tags: ["Weapon", "Tool", "Woodwork"]
+  "Base.Crowbar":
+    value: 80
+    tags: ["Weapon", "Tool", "Blunt"]
+  "Base.BaseballBat":
+    value: 60
+    tags: ["Weapon", "Blunt"]
+
+  # === TOOLS ===
+  "Base.Sledgehammer":
+    value: 500
+    tags: ["Tool", "Breaching", "Rare"]
+  "Base.Saw":
+    value: 70
+    tags: ["Tool", "Woodwork"]
+  "Base.Hammer":
+    value: 50
+    tags: ["Tool", "Woodwork"]
+  "Base.Screwdriver":
+    value: 40
+    tags: ["Tool", "Common"]
+  
+  # === MEDICAL ===
+  "Base.Bandage":
+    value: 50
+    tags: ["Medical", "Bandage"]
+  "Base.AlcoholBandage":
+    value: 60
+    tags: ["Medical", "Bandage"]
+  "Base.PillsAntibiotics":
+    value: 200
+    tags: ["Medical", "Antibiotic", "Rare"]
+    
+  # === CONTAINERS ===
+  "Base.Bag_BigHikingBag":
+    value: 150
+    tags: ["Bag", "Equipment"]
+  "Base.Bag_Schoolbag":
+    value: 80
+    tags: ["Bag", "Equipment"]
+    
+  # === RESOURCES ===
+  "Base.Nails":
+    value: 20
+    tags: ["Resource", "Woodwork"]
+  "Base.Plank":
+    value: 10
+    tags: ["Resource", "Woodwork"]

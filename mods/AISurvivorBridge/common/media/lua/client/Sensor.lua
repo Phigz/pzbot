@@ -13,6 +13,84 @@ local function getSquare(x, y, z)
     return cell:getGridSquare(x, y, z)
 end
 
+-- Helper: Extract Interactible Objects (Ovens/TVs/Gens) from a square
+local function getInteractibleData(sq)
+    local data = {}
+    local objects = sq:getObjects()
+    if not objects then return data end
+    
+    for i=0, objects:size()-1 do
+        local obj = objects:get(i)
+        local info = nil
+        
+        -- STOVE / MICROWAVE
+        if instanceof(obj, "IsoStove") then
+            info = {
+                type = "Stove",
+                activated = obj:Activated(), -- Capitalized in Java (sometimes isActivated)
+                temp = obj:getCurrentTemperature()
+            }
+            -- Microwave check
+            if obj:getContainer() and obj:getContainer():getType() == "microwave" then
+                info.type = "Microwave"
+            end
+            
+        -- GENERATOR
+        elseif instanceof(obj, "IsoGenerator") then
+            info = {
+                type = "Generator",
+                activated = obj:isActivated(),
+                fuel = obj:getFuelLevel(),
+                cond = obj:getCondition()
+            }
+            
+        -- TV / RADIO (World Object)
+        elseif instanceof(obj, "IsoTelevision") or instanceof(obj, "IsoRadio") then
+             -- Note: IsoTelevision usually extends IsoWaveSignal
+             info = { type = "TV" }
+             if instanceof(obj, "IsoRadio") then info.type = "Radio" end
+             
+             local d = obj:getDeviceData()
+             if d then
+                 info.activated = d:getIsTurnedOn()
+                 info.channel = d:getChannel()
+                 info.vol = d:getDeviceVolume()
+             end
+
+        -- LIGHT SWITCH (Wall Switches / Lamps)
+        elseif instanceof(obj, "IsoLightSwitch") then
+             info = {
+                 type = "Light",
+                 activated = obj:isActivated(),
+                 room = (sq:getRoom() and sq:getRoom():getName()) or "Unknown"
+             }
+
+        -- LAUNDRY
+        elseif instanceof(obj, "IsoClothingWasher") then
+             info = { type = "Washer", activated = obj:isActivated() }
+        elseif instanceof(obj, "IsoClothingDryer") then
+             info = { type = "Dryer", activated = obj:isActivated() }
+        end
+
+        if info then
+            -- Common fields
+            info.x = math.floor(obj:getX())
+            info.y = math.floor(obj:getY())
+            info.z = math.floor(obj:getZ())
+            -- Add ID using coordinates if no real ID
+            info.id = "int_" .. tostring(info.x) .. "_" .. tostring(info.y) .. "_" .. tostring(i)
+            
+            table.insert(data, {
+                type = info.type,
+                id = info.id,
+                x = info.x, y = info.y, z = info.z,
+                meta = info
+            })
+        end
+    end
+    return data
+end
+
 -- Used for immediate neighbor (3x3) checks
 -- Keep detecting zombies here for immediate danger sensing in the 3x3 grid
 local function getObjectDataForNeighbor(sq)
@@ -384,6 +462,13 @@ function Sensor.scan(player, gridRadius)
                 -- Always include tile if seen, even if blocked (so we can see Walls/Trees)
                 local tileData = { x = x, y = y, z = pz, w = isWalkable }
                      
+                -- INTERACTIBLES SCAN
+                -- Scan for functional objects on this square
+                local inters = getInteractibleData(sq)
+                for _, inter in ipairs(inters) do
+                     table.insert(vision.objects, inter)
+                end
+                
                 -- Room Logic
                 local room = sq:getRoom()
                 if room then

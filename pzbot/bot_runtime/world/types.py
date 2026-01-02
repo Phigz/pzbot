@@ -12,7 +12,7 @@ class TileData(BaseModel):
     z: int
     
     # Navigation properties
-    is_walkable: bool = True
+    is_walkable: bool = Field(default=True, alias='w')
     is_explored: bool = False
     
     # Timestamp of last observation

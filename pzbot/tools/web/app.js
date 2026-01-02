@@ -157,7 +157,46 @@ function renderContainer(c, label, color, headerSuffix) {
 function updateCortex(brain) {
     if (!brain) return;
 
-    // 1. Threat Monitor
+    // 1. Situation Mode
+    const sit = brain.situation || { current_mode: "IDLE", primary_driver: "None" };
+    // Handle Enum serialization (might be "SituationMode.IDLE" or just "IDLE" or int)
+    // Pydantic Enum serialization usually behaves like string if configured, or needs cleaning.
+    let modeRaw = sit.current_mode;
+    if (typeof modeRaw === 'object' && modeRaw.name) modeRaw = modeRaw.name; // Handle Enum object if JSONified weirdly
+    let modeStr = String(modeRaw).replace("SituationMode.", "");
+
+    let sitColor = "#eee";
+    if (modeStr === 'SURVIVAL') sitColor = "#f44336";
+    if (modeStr === 'OPPORTUNITY') sitColor = "#FFD700";
+    if (modeStr === 'MAINTENANCE') sitColor = "#2196F3";
+
+    document.getElementById('situationContainer').innerHTML = `
+        <div style="color:${sitColor}; font-size: 1.4em;">${modeStr}</div>
+        <div style="font-size:0.8em; color:#888; margin-top:5px;">Driver: ${sit.primary_driver}</div>
+    `;
+
+    // 2. Environment
+    const env = brain.environment || {};
+    const light = env.is_daylight ? "Daylight" : "Dark";
+    const shelter = env.is_sheltered ? "Sheltered" : "Exposed";
+    document.getElementById('envContainer').innerHTML = `
+        <div class="item-row">Light: <span style="float:right">${light}</span></div>
+        <div class="item-row">Shelter: <span style="float:right">${shelter}</span></div>
+        <div class="item-row">Weather Sev: <span style="float:right">${(env.weather_severity || 0).toFixed(2)}</span></div>
+        <div class="item-row">Light Level: <span style="float:right">${(env.light_level || 0).toFixed(2)}</span></div>
+    `;
+
+    // 3. Loot & Nav
+    const loot = brain.loot || {};
+    const nav = brain.navigation || {};
+
+    document.getElementById('lootNavContainer').innerHTML = `
+        <div class="item-row" style="color:#FFD700">Zone Value: <span style="float:right; font-weight:bold">${(loot.zone_value || 0).toFixed(0)}</span></div>
+        <div class="item-row">Mapped: <span style="float:right">${(nav.mapped_ratio * 100).toFixed(0)}%</span></div>
+        <div class="item-row">Constriction: <span style="float:right">${(nav.local_constriction || 0).toFixed(2)}</span></div>
+    `;
+
+    // 4. Threat Monitor
     const threat = brain.threat || { global_level: 0, vectors: [] };
     const tVal = threat.global_level.toFixed(0);
     document.getElementById('threatLevelBar').style.width = `${Math.min(tVal, 100)}%`;
@@ -221,8 +260,40 @@ function updatePlayer(p) {
     if (!p) return;
     // ... Simple Vital Update ...
     const h = p.body ? p.body.health / 100 : 0;
+
+    // Body Parts Detail
+    let partsHtml = "";
+    if (p.body && p.body.parts) {
+        // Only show parts that are NOT full health or have conditions
+        // parts is a dict { "Hand_L": { "health":..., "bleeding":... } }
+        const parts = p.body.parts;
+        for (const [name, data] of Object.entries(parts)) {
+            const partHealth = data.health !== undefined ? data.health : 100;
+            const isHurt = partHealth < 100;
+            const conditions = [];
+
+            if (data.bleeding) conditions.push(`<span class="tag" style="background:#500; border:1px solid #a00">BLEED</span>`);
+            if (data.bitten) conditions.push(`<span class="tag" style="background:#900; border:1px solid #f00; font-weight:bold">BITTEN</span>`);
+            if (data.scratched) conditions.push(`<span class="tag" style="background:#633; border:1px solid #966">SCRATCH</span>`);
+            if (data.fracture) conditions.push(`<span class="tag" style="background:#660; border:1px solid #aa0">BROKEN</span>`);
+
+            if (isHurt || conditions.length > 0) {
+                const ph = partHealth / 100.0;
+                partsHtml += `<div class="item-row" style="margin-top:2px; padding-left:5px; border-left:2px solid ${getHealthColor(ph)}">
+                    <span style="width:80px; display:inline-block">${name}</span>
+                    <span style="color:${getHealthColor(ph)}">${partHealth.toFixed(0)}%</span>
+                    ${conditions.join(" ")}
+                </div>`;
+            }
+        }
+    }
+    if (!partsHtml) partsHtml = `<div style="color:#666; font-style:italic; padding-left:5px;">No injuries.</div>`;
+
     document.getElementById('vitalsContainer').innerHTML =
-        `<div class="row">Health: ${(h * 100).toFixed(0)}%</div><div class="stat-bar"><div class="stat-fill" style="width:${h * 100}%; background:${getHealthColor(h)}"></div></div>`;
+        `<div class="row">Health: ${(h * 100).toFixed(0)}%</div>
+         <div class="stat-bar"><div class="stat-fill" style="width:${h * 100}%; background:${getHealthColor(h)}"></div></div>
+         <div style="margin-top:10px; font-weight:bold; color:#ccc; border-bottom:1px solid #444; margin-bottom:5px;">Body Status</div>
+         ${partsHtml}`;
 
     // ... Bio & Nutrition ...
     if (p.body) {
@@ -340,6 +411,26 @@ function renderEntityRow(e, isMemory) {
             info += ` <span style="color:#ccffcc">[${meta.worn.join(", ")}]</span>`;
         }
         if (meta.state) info += ` <span style="color:#aaa">{${meta.state}}</span>`;
+    }
+
+    // Functional Objects
+    if (e.type == 'Stove' || e.type == 'Microwave') {
+        const stateColor = meta.activated ? "#ccffcc" : "#aaa";
+        const stateText = meta.activated ? "[ON]" : "[OFF]";
+        info = `<span style="color:${stateColor}">${stateText}</span> ${meta.temp ? Math.round(meta.temp) + "°C" : ""}`;
+    }
+    if (e.type == 'Generator') {
+        const stateColor = meta.activated ? "#ccffcc" : "#aaa";
+        info = `<span style="color:${stateColor}">${meta.activated ? "[RUNNING]" : "[OFF]"}</span> Fuel:${(meta.fuel).toFixed(1)}% Cond:${meta.cond}%`;
+    }
+    if (e.type == 'TV' || e.type == 'Radio') {
+        const stateColor = meta.activated ? "#ccffcc" : "#aaa";
+        info = `<span style="color:${stateColor}">${meta.activated ? "ON" : "OFF"}</span> Ch:${meta.channel}`;
+        if (meta.vol > 0) info += ` Vol:${meta.vol.toFixed(2)}`;
+    }
+    if (e.type == 'Light') {
+        info = meta.activated ? `<span style="color:#ffffcc">ON</span>` : `<span style="color:#666">OFF</span>`;
+        if (meta.room) info += ` (${meta.room})`;
     }
 
     const ttlHtml = isMemory ? getTTL(e) : "";

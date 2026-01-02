@@ -184,3 +184,14 @@ class GridSystem:
             "total_tiles": total_tiles,
             "loaded_chunks": len(self.chunks)
         }
+
+    def get_tile(self, x: int, y: int, z: int) -> Optional[Any]:
+        cx = int(x) // CHUNK_SIZE
+        cy = int(y) // CHUNK_SIZE
+        key = (cx, cy)
+        
+        with self._lock:
+            if key in self.chunks:
+                tile_key = f"{int(x)}_{int(y)}_{int(z)}"
+                return self.chunks[key].data.tiles.get(tile_key)
+        return None

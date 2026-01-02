@@ -38,6 +38,35 @@ This document describes the structure of the JSON payload sent from the Lua Mod 
 | `temperature` | `float` | Body temp (approx 37.0 normal). |
 | `is_infected` | `bool` | Zombie infection status. |
 | `is_bitten` | `bool` | Injury status. |
+| `parts` | `Dict[str, Part]` | Detail on specific limbs (e.g. "Hand_L"). |
+
+---
+
+## 1.2 Body Part (`Part`)
+| Field | Type | Description |
+|---|---|---|
+| `health` | `float` | 0-100% |
+| `bleeding` | `bool` | Is actively bleeding. |
+| `bitten` | `bool` | Is bitten (high infection risk). |
+| `scratched` | `bool` | Is scratched. |
+| `fracture` | `bool` | Is broken. |
+| `bandaged` | `bool` | Is currently treated. |
+
+---
+
+## 2. Environment (`Environment`)
+Global weather and lighting context.
+
+| Field | Type | Description |
+|---|---|---|
+| `time_of_day` | `float` | 0.0 - 24.0 (Hours). |
+| `weather` | `string` | Synthesized summary: "Clear", "Raining", "Storm", "Foggy". |
+| `temperature` | `float` | Air temperature around character (Celsius). |
+| `wind_speed` | `float` | 0.0 - 1.0 (Calm - Hurricane). |
+| `light_level` | `float` | 0.0 - 1.0 (Pitch Black - Bright Daylight). |
+| `rain` | `float` | 0.0 - 1.0 intensity. |
+| `fog` | `float` | 0.0 - 1.0 intensity. |
+| `clouds` | `float` | 0.0 - 1.0 intensity. |
 
 ---
 
@@ -78,6 +107,17 @@ Used for Zombies, Players, Animals.
 *   `isMale`, `isFemale`: Gender flags.
 *   `milking`: Boolean (is milking in progress?).
 *   `canBePet`: Boolean.
+
+### 2.2 Interactibles (World Objects)
+New classification for functional objects found via grid scan.
+
+| Type | Meta Fields | Description |
+|---|---|---|
+| `Stove` / `Microwave` | `activated`, `temp` | Cooking appliances. |
+| `Generator` | `activated`, `fuel`, `cond` | Power source. |
+| `TV` / `Radio` | `activated`, `channel`, `vol` | Entertainment/News. |
+| `Light` | `activated`, `room` | Light switches and lamps. |
+| `Washer` / `Dryer` | `activated` | Laundry machines. |
 
 ---
 

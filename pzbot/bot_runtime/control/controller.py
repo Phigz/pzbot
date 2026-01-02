@@ -46,7 +46,7 @@ class BotController:
             needs_str = ", ".join([f"{n.name}:{n.score:.0f}" for n in b.needs.active_needs]) or "None"
             
             # Recent Thought
-            last_thought = b.thoughts[-1].message if b.thoughts else "Empty Mind"
+            last_thought = b.active_thought.message if b.active_thought else "..."
             
             logger.info(f"[CORTEX] Threat: {t_lvl:.1f}% ({t_vec} vec) | Needs: [{needs_str}] | Thought: \"{last_thought}\"")
             

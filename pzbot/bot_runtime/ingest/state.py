@@ -66,6 +66,9 @@ class PlayerBody(LogExtraFieldsBase):
     sanity: float = 0.0
     boredom: float = 0.0
     
+    # Body Parts (Bleeding, Bitten, etc.)
+    parts: Dict[str, Any] = Field(default_factory=dict)
+    
     nutrition: Nutrition = Field(default_factory=Nutrition)
     
     # Legacy / Derived Properties? 
@@ -256,6 +259,9 @@ class Environment(LogExtraFieldsBase):
     temperature: float = 0.0
     rain_intensity: float = 0.0
     fog_intensity: float = 0.0
+    wind_speed: float = 0.0
+    light_level: float = 0.0
+    clouds: float = 0.0
     nearby_containers: List[Container] = Field(default_factory=list) # Global containers fallback
 
     @field_validator('nearby_containers', mode='before')

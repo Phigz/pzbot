@@ -53,6 +53,44 @@ class Thought:
     timestamp: float = field(default_factory=time.time)
 
 @dataclass
+class LootState:
+    """Analysis of available resources."""
+    zone_value: float = 0.0          # Aggregate value of items in range
+    high_value_targets: List[Dict] = field(default_factory=list) # Specific items of interest
+    container_targets: List[Dict] = field(default_factory=list)  # Containers worth checking
+    best_weapon: Optional[str] = None # Best available weapon ID
+
+@dataclass
+class EnvironmentState:
+    """Analysis of world conditions."""
+    is_daylight: bool = True
+    weather_severity: float = 0.0    # 0.0=Clear, 1.0=Storm
+    is_sheltered: bool = False       # Indoors/Roofed
+    light_level: float = 1.0         # Estimated Lux
+
+@dataclass
+class NavigationState:
+    """Analysis of spatial context."""
+    mapped_ratio: float = 0.0        # % of local chunk known
+    local_constriction: float = 0.0  # 0=Open, 1=Tight
+    nearest_exit: Optional[tuple] = None # Vector to outside
+
+from enum import Enum, auto
+
+class SituationMode(str, Enum):
+    IDLE = "IDLE"
+    SURVIVAL = "SURVIVAL"      # Immediate threat to life
+    MAINTENANCE = "MAINTENANCE"   # Eating, Sleeping, Healing
+    OPPORTUNITY = "OPPORTUNITY"   # Looting, Exploring
+    SOCIAL = "SOCIAL"        # Interacting with players
+
+@dataclass
+class SituationState:
+    """Meta-analysis of the current context."""
+    current_mode: SituationMode = SituationMode.IDLE
+    primary_driver: str = "None"     # Reason for mode (e.g. "Bleeding")
+
+@dataclass
 class BrainState:
     """
     The current mental snapshot of the bot.
@@ -60,5 +98,11 @@ class BrainState:
     """
     threat: ThreatState = field(default_factory=ThreatState)
     needs: NeedState = field(default_factory=NeedState)
+    loot: LootState = field(default_factory=LootState)
+    environment: EnvironmentState = field(default_factory=EnvironmentState)
+    navigation: NavigationState = field(default_factory=NavigationState)
+    situation: SituationState = field(default_factory=SituationState)
+    
     thoughts: List[Thought] = field(default_factory=list)
+    active_thought: Optional[Thought] = None # The thought generated THIS tick, if any.
     intent: Optional[str] = None # Description of current high-level goal

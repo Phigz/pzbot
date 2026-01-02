@@ -343,6 +343,39 @@ function ObservationClient.OnPlayerUpdateObserve(player)
             p.action_state.current_action_type = actionStatus.current_action_type
         end
 
+        -- === ENVIRONMENT ===
+        local gt = getGameTime()
+        local clim = getClimateManager()
+        
+        -- Light Level (Approx from player square)
+        local light = 0.0
+        local pSq = getPlayer():getCurrentSquare()
+        if pSq then
+             light = pSq:getLightLevel(0) -- viewport 0
+        end
+
+        local clouds = clim:getCloudIntensity()
+        local weatherStr = "Clear"
+        
+        if clim:getRainIntensity() > 0.5 then weatherStr = "Storm"
+        elseif clim:getRainIntensity() > 0.0 then weatherStr = "Raining"
+        elseif clim:getFogIntensity() > 0.25 then weatherStr = "Foggy"
+        elseif clouds > 0.6 then weatherStr = "Overcast"
+        elseif clouds > 0.25 then weatherStr = "Cloudy"
+        end
+
+        state.environment = {
+            time_of_day = gt:getTimeOfDay(),
+            rain = clim:getRainIntensity(),
+            fog = clim:getFogIntensity(),
+            clouds = clouds,
+            temperature = clim:getAirTemperatureForCharacter(getPlayer()), 
+            wind_speed = clim:getWindIntensity(),
+            light_level = light,
+            ex_temp = clim:getTemperature(), -- Global Air Temp
+            weather = weatherStr 
+        }
+
         -- Write to disk
         util.writeState(OUTPUT_FILE_NAME, state)
     end
