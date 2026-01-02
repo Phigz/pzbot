@@ -31,9 +31,12 @@ const COLORS = {
     GenericLive: '#E0E0E0', GenericMem: '#9E9E9E' // Gray fallback
 };
 
+// Toggle State
+let SHOW_ZONES = false;
+
 function getStringColor(t) {
     // Priority: Room hash -> Layer -> Default
-    if (t.room && t.room !== "outside") return stringToHashColor(t.room);
+    if (SHOW_ZONES && t.room && t.room !== "outside") return stringToHashColor(t.room);
     return COLORS[t.layer] || COLORS.Default;
 }
 
@@ -186,6 +189,10 @@ function updateBrainState(brain) {
         <div style="font-size:1.0em; color:#fff; margin-top:10px;">
             Strategy: <strong>${brain.active_strategy_name || "Init"}</strong> ${proposal}
         </div>
+        <div style="font-size:0.9em; color:#aaa; margin-top:5px; border-top:1px solid #444; padding-top:4px;">
+            Plan: <span style="color:#f96">${brain.active_plan_name || "None"}</span> 
+            <span style="font-size:0.8em">(${brain.plan_status || "IDLE"})</span>
+        </div>
     `;
 
     // 2. Environment
@@ -205,6 +212,8 @@ function updateBrainState(brain) {
 
     document.getElementById('lootNavContainer').innerHTML = `
         <div class="item-row" style="color:#FFD700">Zone Value: <span style="float:right; font-weight:bold">${(loot.zone_value || 0).toFixed(0)}</span></div>
+        <div class="item-row">Zone: <span style="float:right; color:#aaf">${(brain.zone?.current_zone || "Unknown")}</span></div>
+        <div class="item-row" style="font-size:0.8em; color:#888; text-align:right">${(brain.zone?.tags || []).join(", ")}</div>
         <div class="item-row">Mapped: <span style="float:right">${(nav.mapped_ratio * 100).toFixed(0)}%</span></div>
         <div class="item-row">Constriction: <span style="float:right">${(nav.local_constriction || 0).toFixed(2)}</span></div>
     `;
@@ -766,7 +775,7 @@ async function poll() {
                 updateMemory(lastGrid);
             }
             if (data.grid_data.brain) {
-                updateCortex(data.grid_data.brain);
+                updateBrainState(data.grid_data.brain);
             }
         }
 

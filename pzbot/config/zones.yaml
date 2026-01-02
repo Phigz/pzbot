@@ -1,0 +1,44 @@
+# zones.yaml
+# Maps PZ Room Names (partial match) to Semantic Tags.
+# Format: "keyword": [Tag1, Tag2]
+
+mappings:
+  # Residential
+  "kitchen": ["Food", "Cooking", "Water"]
+  "bedroom": ["Rest", "Comfort", "Clothing"]
+  "living": ["Rest", "Comfort", "Boredom"]
+  "bathroom": ["Water", "Medical", "Hygiene"]
+  "garage": ["Tools", "Parts"]
+  
+  # Commercial - Food
+  "grocer": ["Food", "Water"]
+  "market": ["Food", "Water"]
+  "gigamart": ["Food", "Water", "General"]
+  "burger": ["Food"]
+  "pizza": ["Food"]
+  "spiffo": ["Food"]
+  "cafe": ["Food", "Water"]
+  "bakery": ["Food"]
+  
+  # Commercial - Specialized
+  "pharmacy": ["Medical"]
+  "medical": ["Medical"]
+  "doctor": ["Medical"]
+  "clinic": ["Medical"]
+  "book": ["Literature", "Boredom"]
+  "library": ["Literature", "Boredom"]
+  "gun": ["Weapon", "Ammo"]
+  "police": ["Weapon", "Security"]
+  "hardware": ["Tools", "Weapon"]
+  "warehouse": ["Tools", "Materials", "Loot"]
+  "storage": ["Loot", "Materials"]
+  
+  # Industrial / Utility
+  "factory": ["Materials", "Tools"]
+  "shed": ["Tools"]
+  
+  # Educational
+  "school": ["Literature", "Boredom"]
+  
+  # Fallback
+  "default": ["Unknown"]

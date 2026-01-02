@@ -11,8 +11,10 @@ class DecisionEngine:
     The 'Executive Function'.
     Evaluates all available strategies and executes the winner.
     """
-    def __init__(self, action_queue: ActionQueue):
+
+    def __init__(self, action_queue: ActionQueue, planner=None):
         self.action_queue = action_queue
+        self.planner = planner
         self.strategies: List[Strategy] = []
         self.active_strategy: Optional[Strategy] = None
 
@@ -57,6 +59,6 @@ class DecisionEngine:
         # 3. Execute
         if self.active_strategy:
             try:
-                self.active_strategy.execute(state, self.action_queue)
+                self.active_strategy.execute(state, self.action_queue, self.planner)
             except Exception as e:
                 logger.error(f"Error executing strategy {self.active_strategy.name}: {e}")

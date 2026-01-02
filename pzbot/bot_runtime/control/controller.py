@@ -19,6 +19,7 @@ from bot_runtime.strategy.decision_engine import DecisionEngine
 from bot_runtime.strategy.implementations.idle import IdleStrategy
 from bot_runtime.strategy.implementations.survival import SurvivalStrategy
 from bot_runtime.strategy.implementations.loot import LootStrategy
+from bot_runtime.planning.planner import ActionPlanner
 
 class BotController:
     def __init__(self, world_model: WorldModel, action_queue: ActionQueue, input_writer: InputWriter):
@@ -31,8 +32,14 @@ class BotController:
         # Initialize The Brain
         self.brain = Brain(self.world_model)
         
-        # Initialize Strategy Layer
-        self.decision_engine = DecisionEngine(self.action_queue)
+        # Initialize Planner (Tier 3.5)
+        self.planner = ActionPlanner()
+        
+        # Initialize Strategy Layer (Tier 3)
+        # Note: DecisionEngine now takes Planner instead of/in addition to Queue?
+        # Actually Strategies set goals on the Planner. The Planner outputs to the Queue.
+        # So DecisionEngine needs access to Planner.
+        self.decision_engine = DecisionEngine(self.action_queue, self.planner)
         self.decision_engine.register_strategy(IdleStrategy())
         self.decision_engine.register_strategy(SurvivalStrategy())
         self.decision_engine.register_strategy(LootStrategy())
@@ -46,7 +53,26 @@ class BotController:
         self.brain.update()
         
         # 3. Decision Making (Strategy Selection)
+        # Strategies evaluate state and set goals on the Planner
         self.decision_engine.decide(self.brain.state)
+        
+        # 3.5. Planning (FSM)
+        # Planner ticks the active plan and emits atomic actions to the Queue
+        plan_actions = self.planner.update(self.brain.state)
+        
+        # Sync Status to Brain State for UI
+        if self.planner.active_plan:
+            self.brain.state.active_plan_name = self.planner.active_plan.name
+            self.brain.state.plan_status = self.planner.active_plan.status.value
+        else:
+            self.brain.state.active_plan_name = "None"
+            self.brain.state.plan_status = "Idle"
+            
+        if plan_actions:
+            for a in plan_actions:
+                self.action_queue.add(a)
+
+        # 4. Log World Status
 
         # 4. Log World Status
         self.world_logger.update()

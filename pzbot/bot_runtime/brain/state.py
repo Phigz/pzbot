@@ -91,6 +91,13 @@ class SituationState:
     primary_driver: str = "None"     # Reason for mode (e.g. "Bleeding")
 
 @dataclass
+class ZoneState:
+    """Analysis of the current semantic zone."""
+    current_zone: str = "Unknown"    # e.g., 'Kitchen', 'Police_Storage'
+    tags: List[str] = field(default_factory=list) # e.g., ['Food', 'Cooking']
+    last_update_tick: int = 0
+
+@dataclass
 class BrainState:
     """
     The current mental snapshot of the bot.
@@ -102,9 +109,12 @@ class BrainState:
     environment: EnvironmentState = field(default_factory=EnvironmentState)
     navigation: NavigationState = field(default_factory=NavigationState)
     situation: SituationState = field(default_factory=SituationState)
+    zone: ZoneState = field(default_factory=ZoneState)
     
     thoughts: List[Thought] = field(default_factory=list)
     active_thought: Optional[Thought] = None # The thought generated THIS tick, if any.
     intent: Optional[str] = None # Description of current high-level goal
     active_strategy_name: str = "Init" # The name of the currently running strategy
+    active_plan_name: str = "None" # The name of the currently running FSM Plan (e.g. Loot(Gun))
+    plan_status: str = "Idle" # Status of the plan (RUNNING, PENDING, etc)
     proposed_actions: List[Dict] = field(default_factory=list) # Actions the strategy WANTS to execute

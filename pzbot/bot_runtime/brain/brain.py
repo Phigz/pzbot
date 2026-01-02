@@ -6,6 +6,7 @@ from bot_runtime.analysis.needs import NeedAnalyzer
 from bot_runtime.analysis.loot import LootAnalyzer
 from bot_runtime.analysis.environment import EnvironmentAnalyzer
 from bot_runtime.analysis.navigation import NavigationAnalyzer
+from bot_runtime.analysis.zones import ZoneAnalyzer
 from bot_runtime.analysis.situation import SituationAnalyzer
 
 from bot_runtime.brain.state import BrainState, CharacterPersonality, Thought
@@ -28,6 +29,7 @@ class Brain:
         self.loot_analyzer = LootAnalyzer(self.personality)
         self.env_analyzer = EnvironmentAnalyzer(self.personality)
         self.nav_analyzer = NavigationAnalyzer(self.personality)
+        self.zone_analyzer = ZoneAnalyzer(self.personality) # Phase 5
         
         # Tier 2 Analyzers
         self.situation_analyzer = SituationAnalyzer()
@@ -50,6 +52,7 @@ class Brain:
         loot = self.loot_analyzer.analyze(self.memory, needs)
         env = self.env_analyzer.analyze(self.memory)
         nav = self.nav_analyzer.analyze(self.memory)
+        zone = self.zone_analyzer.analyze(self.memory) # New Phase 5
         
         # Logging Thoughts based on Tier 1
         if threat.global_level > 50:
@@ -72,6 +75,7 @@ class Brain:
         self.state.loot = loot
         self.state.environment = env
         self.state.navigation = nav
+        self.state.zone = zone
         self.state.situation = situation
         
         # Update Thought Stream
