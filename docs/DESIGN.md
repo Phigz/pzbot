@@ -26,47 +26,72 @@ The system consists of two main components operating in a loop:
 - **Navigation**: Plans paths using A* on the internal grid.
 - **Control**: Manages the action queue and ensures smooth execution.
 
-### 2.3. Data Flow Architecture
+### 2.3. Holistic System Architecture
+The following diagram illustrates the complete loop from the Game Engine, through the Lua Bridge, to the Python Brain, and back.
 
-We model the system as a decoupled loop where data flows up from the game to the brain (Perception), and commands flow down from the brain to the game (Control).
+```mermaid
+graph TB
+    subgraph Game ["Project Zomboid (Java)"]
+        World[Game World & Entities]
+    end
 
-#### 2.3.1. Incoming Data (Perception Pipeline)
-The "Incoming" flow is responsible for turning raw, high-frequency game scans into a stable, queryable memory.
+    subgraph Mod ["Lua Bridge (AISurvivorBridge)"]
+        Sensor[Sensor.lua]
+        Executor[ActionExecutor.lua]
+        Client[ActionClient.lua]
+    end
 
+    subgraph IO ["File System Interface"]
+        StateJSON[state.json]
+        InputJSON[input.json]
+    end
+
+    subgraph Bot ["Python Runtime (pzbot)"]
+        subgraph Perception
+            Ingest[State Ingest]
+            WM[World Model]
+            Grid[Spatial Grid]
+            Mem[Entity Memory]
+        end
+
+        subgraph Cortex ["Decision Engine"]
+            Brain[Brain Update]
+            Strat[Strategy Layer]
+            Plan[Planner FSMs]
+        end
+
+        subgraph Actuation ["Control Layer"]
+            Exec["Executors (Move, Interact...)"]
+            Queue[Action Queue]
+            Writer[Input Writer]
+        end
+    end
+
+    %% Data Flow
+    World -->|Scans| Sensor
+    Sensor -->|Writes| StateJSON
+    StateJSON -->|Reads| Ingest
+    Ingest -->|Updates| WM
+    WM -->| Updates| Grid & Mem
+    WM -->|Query| Brain
+
+    %% Decision Flow
+    Brain -->|Context| Strat
+    Strat -->|Goal| Plan
+    Plan -->|Atomic Actions| Exec
+    Exec -->|Objects| Queue
+    Queue -->|Serialize| Writer
+
+    %% Command Flow
+    Writer -->|Writes| InputJSON
+    InputJSON -->|Reads| Client
+    Client -->|Dispatch| Executor
+    Executor -->|API Calls| World
 ```
-[Lua Mod] --(Scans Env)--> [state.json] --(File IO)--> [Python Ingest]
-                                                          |
-                                                      (Raw Dict)
-                                                          v
-                                                  [World Model]
-                                                    /       \
-                                            (Updates)       (Updates)
-                                                v               v
-                                         [Spatial Grid]   [Entity Tracker]
-                                                \               /
-                                            (Abstracted State)
-                                                    v
-                                             [Planning Layer]
-```
 
-#### 2.3.2. Outgoing Data (Action Pipeline)
-The "Outgoing" flow translates high-level intents (e.g., "Loot House") into specific, frame-perfect game API calls.
-
-```
-[Planning Layer] --(Decision)--> [Action Controller]
-                                        |
-                                 (Atomic Commands)
-                                        v
-                                 [Command Queue]
-                                        |
-                                  (Serialization)
-                                        v
-                                   [input.json]
-                                        |
-                                    (File IO)
-                                        v
-                                    [Lua Mod] --(Game API)--> [Execute Action]
-```
+This architecture ensures a clean separation of concerns:
+- **Lua**: Dumb I/O. Reads state, executes atomic commands.
+- **Python**: Smart logic. Maintains memory, plans routes, decides strategy.
 
 ---
 
@@ -136,7 +161,31 @@ The **World Model** is the bot's internal representation of the game state. It a
 
 ## 4. API Reference
 
-### 4.1. Input Schema (`input.json`)
+### 4.1. Action Architecture (The Actuation Loop)
+This data flow represents how a high-level goal becomes a frame-perfect game instruction.
+
+```mermaid
+graph TD
+    subgraph Brain ["Python Runtime (The Brain)"]
+        S[Strategies] -->|Sets Goal| P[Planner]
+        P -->|Ticks Logic| FSM{Active Plan FSM}
+        FSM -->|Emits| A[Action Object]
+        A -->|Queued| Q[ActionQueue]
+        Q -->|Serialized| IW[InputWriter]
+    end
+
+    subgraph Interface ["File System Scope"]
+        IW -->|Writes| F[input.json]
+    end
+
+    subgraph Body ["Lua Mod (The Body)"]
+        F -->|Reads| L[ActionClient]
+        L -->|Dispatches| E[ActionExecutor]
+        E -->|Calls| API[IsoPlayer/Game API]
+    end
+```
+
+### 4.2. Input Schema (`input.json`)
 The bot writes commands to `input.json`.
 
 **Example:**
@@ -147,22 +196,33 @@ The bot writes commands to `input.json`.
   "actions": [
     {
       "id": "uuid-string",
-      "type": "move_to",
+      "type": "MoveTo",
       "params": { "x": 100, "y": 100, "sprinting": false }
     }
   ]
 }
 ```
 
-**Common Actions:**
-| Action | Params | Description |
-|--------|--------|-------------|
-| `move_to` | `x`, `y`, `z` | Move to coordinate. |
-| `look_to` | `x`, `y` | Face a coordinate. |
-| `wait` | `duration_ms` | Idle for time. |
-| `sit` | (None) | Sit on ground. |
+**Supported Actions:**
+| Action | Params | Description | Status |
+|--------|--------|-------------|--------|
+| `MoveTo` | `x`, `y`, `z` | Move to coordinate. | ✅ Implemented |
+| `LookTo` | `x`, `y` | Face a coordinate. | ✅ Implemented |
+| `Wait` | `duration_ms` | Idle for time. | ✅ Implemented |
+| `Sit` | (None) | Sit on ground. | ✅ Implemented |
+| `Loot` | `targetId` | Transfer item to inventory. | ⚠️ Prototype |
+| `Equip` | `itemId`, `slot` | Equip item in hand. | ⚠️ Prototype |
+| `Attack` | `targetId` | Swing weapon at target. | ❌ Planned |
 
-### 4.2. State Schema (`state.json`)
+### 4.4. Missing Actuation Primitives
+To fully map the game's mechanics, we need to implement these atomic actions:
+- **`Interact`**: For doors, windows, light switches, generators.
+- **`Consume`**: Eat/Drink items.
+- **`Craft`**: Execute recipes.
+- **`Vehicle`**: Enter/Exit/Drive.
+
+---
+### 4.3. State Schema (`state.json`)
 The mod writes perception data to `state.json`.
 
 **Example:**

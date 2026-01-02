@@ -1,7 +1,7 @@
 import logging
 from bot_runtime.world.model import WorldModel
-from bot_runtime.control.executors.wait import WaitExecutor
-from bot_runtime.control.executors.movement import MovementExecutor
+from bot_runtime.control.builders.wait import WaitExecutor
+from bot_runtime.control.builders.movement import MovementExecutor
 
 logger = logging.getLogger(__name__)
 

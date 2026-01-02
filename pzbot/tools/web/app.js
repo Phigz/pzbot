@@ -92,7 +92,11 @@ function renderContainer(c, label, color, headerSuffix) {
 
     if (items && items.length > 0) {
         // Recursive Render
-        contentHtml = items.map(i => renderContainer(i, i.name || i.type, color)).join('');
+        contentHtml = items.map(i => {
+            // Propagate Parent Container ID for Loot Actions
+            if (c.id) i.parentContainerId = c.id;
+            return renderContainer(i, i.name || i.type, color);
+        }).join('');
     } else if (isContainer) {
         contentHtml = '<span style="color:#666; font-style:italic; margin-left:10px;">Empty</span>';
     }
@@ -147,14 +151,76 @@ function renderContainer(c, label, color, headerSuffix) {
     let idSpan = "";
     if (c.id) {
         idSpan = `<span style="color:#555; font-size:0.75em; margin-left:4px;">[#${c.id}]</span>`;
+
+        // 1. Loot Button (Individual Item)
+        // If it's NOT a container (has no sub-items shown OR is an inventory item), show Loot
+        // But logic is complex: Bag is an item AND a container.
+        // Rule: If it's in a container list (not Player Inventory), show Loot.
+
+        // We need to know context. color param hints context?
+        // COLORS.ContainerLive (#ffff00) -> World Container
+        // COLORS.ItemLive (#00ffff) -> World Item
+        // "#eee" -> Player Inventory (Don't show loot)
+
+        const isWorldContext = (color === COLORS.ContainerLive || color === COLORS.ItemLive || color === COLORS.ContainerMem || color === COLORS.ItemMem);
+
+        if (isWorldContext) {
+            const btnStyle = "margin-right:5px; font-size:0.7em; padding:1px 4px; cursor:pointer; background:#224; color:#ccf; border:1px solid #446;";
+            // Use injected parentContainerId if available (for items inside containers)
+            let cIdParam = "";
+            if (c.parentContainerId) cIdParam = `, containerId: '${c.parentContainerId}'`;
+
+            // Re-check logic: Only show Loot if it is NOT a container itself, OR if it's an item inside a container.
+            // But a Bag IS a container. We might want to loot the BAG itself.
+            // If we are viewing the bag as an ITEM inside a Crate, we want 'Loot' (take bag).
+            // If we are viewing the bag as a CONTAINER (because we are looking inside it), we want 'Loot All' maybe?
+            // Current isContainer check: returns true if it has items.
+            // If bag is empty? isContainer might be false.
+            // Let's stick to "If we are contextually considering it an item (inside a list), allow Loot".
+            // The isContainer check prevents "Loot" button on the Bag *Header* when inside the Crate list?
+            // No, renderContainer is called recursively.
+            // If Bag is inside Crate, Bag is 'c'.
+            // If Bag has items, isContainer=true.
+            // So we skip adding the Loot button?
+            // Correct. If it's a container, we skip the single Loot button.
+            // BUT, if I want to pick up the bag?
+            // I can't currently pick up a bag if it has items?
+            // Maybe we should allow Looting the actual item even if it is a container.
+            // But let's stick to the requested behavior for now: "I don't see any files changes...".
+            // The user just wants the changes applied.
+
+            if (!isContainer) {
+                idSpan += `<button onclick="executeAction('Transfer', {itemId: '${c.id}', mode: 'single'${cIdParam}})" style="${btnStyle}">Loot</button>`;
+            }
+        }
+
+        // Consume Button for Food (Keep existing)
+        if (c.cat === "Food" || (c.type && String(c.type).includes("Food"))) {
+            const style = "margin-right:5px; font-size:0.7em; padding:1px 4px; cursor:pointer; background:#242; color:#cfc; border:1px solid #353;";
+            idSpan += `<button onclick="executeAction('Consume', {itemId: '${c.id}'})" style="${style}">Eat</button>`;
+        }
+
     }
 
-    return `<div class="item-row" style="color:${color}">
-        <strong>${label}</strong>${idSpan} ${extraInfo} ${cap} ${suffix}
-        ${showContent ? `<div style="margin-left:10px; margin-top:2px;">${contentHtml}</div>` : ''}
+    // Loot All Button (Container Header)
+    // Only if it IS a container (has items array or intended to be one) AND is World Context
+    const isWorldContext = (color === COLORS.ContainerLive || color === COLORS.ContainerMem);
+    if (isContainer && isWorldContext && c.id) { // Container needs ID for Loot All
+        const btnStyle = "margin-right:8px; font-size:0.7em; padding:1px 5px; cursor:pointer; background:#430; color:#fd0; border:1px solid #640;";
+        // Prepend Loot All
+        const lootAllBtn = `<button onclick="executeAction('Loot', {containerId: '${c.id}', mode: 'all'})" style="${btnStyle}">Loot</button>`;
+        idSpan = lootAllBtn + idSpan;
+    }
+
+    return `<div class="item-row" style="margin-left:15px; border-left:1px solid #444; padding-left:5px; color:${color}">
+        ${headerSuffix ? "" : `<div style="font-size:0.8em; color:#666; margin-bottom:2px;">${label}</div>`}
+        <div style="display:flex; align-items:center;">
+             ${idSpan}
+             <span style="font-weight:bold;">${label}</span> ${suffix} ${extraInfo}
+        </div>
+        ${showContent ? `<div style="margin-top:2px;">${contentHtml}</div>` : ""}
     </div>`;
 }
-
 
 
 function updateBrainState(brain) {
@@ -393,16 +459,52 @@ function updatePlayer(p) {
     }
 }
 
+// --- Collapsible Helpers ---
+const g_collapsedState = {}; // Persist state across updates
+
+function toggleCollapse(id) {
+    const el = document.getElementById(id);
+    if (el) {
+        const isHidden = el.style.display === 'none';
+        el.style.display = isHidden ? 'block' : 'none';
+        g_collapsedState[id] = isHidden; // Store "Is Visible" (true if it's now visible)
+
+        // Update header arrow
+        const arrow = document.getElementById(`arrow_${id}`);
+        if (arrow) arrow.innerText = isHidden ? '▼' : '▶';
+    }
+}
+
+function makeCollapsible(id, label, count, contentHtml, defaultCollapsed = false) {
+    // Determine state: explicitly stored > default
+    let isVisible = !defaultCollapsed;
+    if (g_collapsedState[id] !== undefined) isVisible = g_collapsedState[id];
+
+    const arrow = isVisible ? '▼' : '▶';
+    const displayStyle = isVisible ? 'block' : 'none';
+    const countBadge = count !== undefined ? `<span style="background:#444; color:#fff; padding:1px 6px; border-radius:10px; font-size:0.75em; margin-left:8px;">${count}</span>` : '';
+
+    return `
+    <div style="margin-bottom: 5px;">
+        <div onclick="toggleCollapse('${id}')" style="cursor:pointer; background:#2a2a2a; border-radius:4px; padding:4px 8px; display:flex; align-items:center;">
+             <span id="arrow_${id}" style="width:20px; text-align:center; color:#888; margin-right:5px;">${arrow}</span>
+             <span style="font-weight:bold; color:#ddd;">${label}</span>
+             ${countBadge}
+        </div>
+        <div id="${id}" style="display:${displayStyle}; padding-left:10px; margin-top:5px; border-left:1px solid #333;">
+            ${contentHtml}
+        </div>
+    </div>`;
+}
+
 // Helper: Shared Entity Render Logic
-function renderEntityRow(e, isMemory) {
+function renderEntityRow(e, isMemory, playerPos) {
     let col = isMemory ? COLORS.GenericMem : COLORS.GenericLive;
     if (e.type == 'Zombie') col = isMemory ? COLORS.ZombieMem : COLORS.ZombieLive;
     if (e.type == 'Player') col = isMemory ? COLORS.PlayerMem : COLORS.PlayerLive;
     if (e.type == 'Animal') col = isMemory ? COLORS.AnimalMem : COLORS.AnimalLive;
 
     // Normalize Metadata access
-    // Live uses 'meta'. Memory (via grid_snapshot.json) appears to flatten properties into the root object.
-    // We check meta, then properties, and finally fallback to 'e' itself.
     const meta = e.meta || e.properties || e;
 
     // Rich Info Builder
@@ -456,12 +558,26 @@ function renderEntityRow(e, isMemory) {
     }
 
     const ttlHtml = isMemory ? getTTL(e) : "";
-    const posStr = `(${e.x.toFixed(1)},${e.y.toFixed(1)})`;
+    let posStr = `(${e.x.toFixed(1)},${e.y.toFixed(1)})`;
 
-    return `<div class="item-row" style="color:${col}">
-        <strong>${e.type} #${e.id}</strong> 
-        <span style="font-size:0.9em; margin-left:5px;">${info}</span>
-        <span style="float:right; opacity:0.7">${posStr} ${ttlHtml}</span>
+    // Distance Calc
+    if (playerPos) {
+        const dist = Math.sqrt(Math.pow(e.x - playerPos.x, 2) + Math.pow(e.y - playerPos.y, 2));
+        posStr += ` <span style="font-size:0.8em; color:#888;">${dist.toFixed(1)}m</span>`;
+
+        // Visually dim if out of reach (approx 2.5m)
+        if (dist > 2.5 && !isMemory) {
+            col = col + "88"; // Add transparency
+        }
+    }
+
+    return `<div class="item-row" style="color:${col}; display:flex; align-items:center;">
+        ${renderActionButtons(e)}
+        <div style="flex:1; margin-left:5px;">
+            <strong>${e.type} #${e.id}</strong> 
+            <span style="font-size:0.9em; margin-left:5px;">${info}</span>
+        </div>
+        <span style="opacity:0.7; font-size:0.9em; white-space:nowrap;">${posStr} ${ttlHtml}</span>
     </div>`;
 }
 
@@ -475,68 +591,73 @@ function updateEntities(state) {
     const players = objects.filter(x => x.type === 'Player');
     const interactables = objects.filter(x => !['Zombie', 'Animal', 'Player'].includes(x.type));
 
-    // Render Lists
-    document.getElementById('zombieCount').innerText = zombies.length;
-    document.getElementById('zombieList').innerHTML = zombies.map(e => renderEntityRow(e, false)).join('');
+    // Sort Interactables by Distance
+    const pPos = state.player ? state.player.position : { x: 0, y: 0 };
+    interactables.sort((a, b) => {
+        const da = Math.hypot(a.x - pPos.x, a.y - pPos.y);
+        const db = Math.hypot(b.x - pPos.x, b.y - pPos.y);
+        return da - db;
+    });
 
-    document.getElementById('animalCount').innerText = animals.length;
-    document.getElementById('animalList').innerHTML = animals.map(e => renderEntityRow(e, false)).join('');
+    const liveContent = document.getElementById('liveContent');
+    let html = "";
 
-    document.getElementById('playerCount').innerText = players.length;
-    document.getElementById('playerList').innerHTML = players.map(e => renderEntityRow(e, false)).join('');
+    // Render Lists with Collapsible Headers
+    html += makeCollapsible('live_zombies', 'Zombies', zombies.length,
+        zombies.map(e => renderEntityRow(e, false, pPos)).join(''), zombies.length > 5);
 
-    document.getElementById('interactCount').innerText = interactables.length;
-    document.getElementById('interactList').innerHTML = interactables.map(e => renderEntityRow(e, false)).join('');
+    html += makeCollapsible('live_animals', 'Animals', animals.length,
+        animals.map(e => renderEntityRow(e, false, pPos)).join(''), animals.length === 0);
+
+    html += makeCollapsible('live_players', 'Players', players.length,
+        players.map(e => renderEntityRow(e, false, pPos)).join(''));
+
+    html += makeCollapsible('live_interact', 'Objects', interactables.length,
+        interactables.map(e => renderEntityRow(e, false, pPos)).join(''), interactables.length > 10);
 
     // 2. Containers
     const containers = asArray(v.nearby_containers);
-    document.getElementById('containerCount').innerText = containers.length;
-    document.getElementById('containerList').innerHTML = containers.map(c => {
-        // Ensure ID is available for renderContainer if stored in meta
-        if (!c.id && c.meta && c.meta.parent_id) c.id = c.meta.parent_id;
-        return renderContainer(c, `${c.object_type} (${c.x},${c.y})`, COLORS.ContainerLive);
-    }).join('');
+    html += makeCollapsible('live_containers', 'Containers', containers.length,
+        containers.map(c => {
+            if (!c.id && c.meta && c.meta.parent_id) c.id = c.meta.parent_id;
+            return renderContainer(c, `${c.object_type} (${c.x},${c.y})`, COLORS.ContainerLive);
+        }).join(''), false); // Keep containers open often
 
     // 3. Vehicles
     const vehicles = asArray(v.vehicles);
-    document.getElementById('vehCount').innerText = vehicles.length;
-    document.getElementById('vehList').innerHTML = vehicles.map(v => {
-        // Break down parts
-        const partsWithContainer = asArray(v.parts).filter(p => p.container || p.items);
-        let partsHtml = "";
-        if (partsWithContainer.length > 0) {
-            partsHtml = partsWithContainer.map(p => {
-                const pName = p.id || p.name || "Part";
-                // Parts have IDs already? Yes, usually part name.
-                return renderContainer(p, pName, "#ccc");
-            }).join('');
-        } else {
-            partsHtml = `<div style="margin-left:10px; color:#666;">No accessible containers</div>`;
-        }
-
-        // Vehicle ID Logic
-        let vId = v.id || "??";
-        vId = vId.replace("vehicle_", "");
-
-        return `<div class="item-row" style="border-left: 2px solid ${COLORS.VehicleLive}; padding-left:8px;">
-            <div style="color:${COLORS.VehicleLive}; font-weight:bold;">${v.object_type || 'Unknown'} [#${vId}] (${v.x.toFixed(1)},${v.y.toFixed(1)})</div>
-            ${partsHtml}
-        </div>`;
-    }).join('');
+    html += makeCollapsible('live_vehicles', 'Vehicles', vehicles.length,
+        vehicles.map(v => {
+            const partsWithContainer = asArray(v.parts).filter(p => p.container || p.items);
+            let partsHtml = "";
+            if (partsWithContainer.length > 0) {
+                partsHtml = partsWithContainer.map(p => {
+                    const pName = p.id || p.name || "Part";
+                    return renderContainer(p, pName, "#ccc");
+                }).join('');
+            } else {
+                partsHtml = `<div style="margin-left:10px; color:#666;">No accessible containers</div>`;
+            }
+            let vId = v.id || "??";
+            vId = vId.replace("vehicle_", "");
+            return `<div class="item-row" style="border-left: 2px solid ${COLORS.VehicleLive}; padding-left:8px;">
+                <div style="color:${COLORS.VehicleLive}; font-weight:bold;">${v.object_type || 'Unknown'} [#${vId}] (${v.x.toFixed(1)},${v.y.toFixed(1)})</div>
+                ${partsHtml}
+            </div>`;
+        }).join(''));
 
     // 5. Signals
     const liveSignals = asArray(v.signals);
-    if (document.getElementById('signalCount')) {
-        document.getElementById('signalCount').innerText = liveSignals.length;
-        document.getElementById('signalList').innerHTML = liveSignals.map(s => {
+    html += makeCollapsible('live_signals', 'Signals', liveSignals.length,
+        liveSignals.map(s => {
             const col = s.type === 'TV' ? '#00AAFF' : '#00FF00';
             return `<div class="item-row" style="border-left: 3px solid ${col}; padding-left:8px;">
                         <div style="font-weight: bold; color: #eee;">${s.name || 'Unknown Device'}</div>
                         <div style="font-size: 0.8em; color: #aaa;">Ch: ${s.channel} | Vol: ${s.volume?.toFixed(1)}</div>
                         <div style="font-size: 0.9em; color: #fff; margin-top: 2px;">"${s.msg || '...'}"</div>
                      </div>`;
-        }).join('');
-    }
+        }).join(''));
+
+    liveContent.innerHTML = html;
 }
 
 function updateMemory(g) {
@@ -548,66 +669,65 @@ function updateMemory(g) {
     const players = objects.filter(x => x.type === 'Player');
     const interactables = objects.filter(x => !['Zombie', 'Animal', 'Player'].includes(x.type));
 
-    document.getElementById('memZombieCount').innerText = zombies.length;
-    document.getElementById('memZombieList').innerHTML = zombies.map(e => renderEntityRow(e, true)).join('');
+    const memContent = document.getElementById('memoryContent');
+    let html = "";
 
-    document.getElementById('memAnimalCount').innerText = animals.length;
-    document.getElementById('memAnimalList').innerHTML = animals.map(e => renderEntityRow(e, true)).join('');
+    html += makeCollapsible('mem_zombies', 'Zombies', zombies.length,
+        zombies.map(e => renderEntityRow(e, true)).join(''), true);
 
-    document.getElementById('memPlayerCount').innerText = players.length;
-    document.getElementById('memPlayerList').innerHTML = players.map(e => renderEntityRow(e, true)).join('');
+    html += makeCollapsible('mem_animals', 'Animals', animals.length,
+        animals.map(e => renderEntityRow(e, true)).join(''));
 
-    document.getElementById('memInteractCount').innerText = interactables.length;
-    document.getElementById('memInteractList').innerHTML = interactables.map(e => renderEntityRow(e, true)).join('');
+    html += makeCollapsible('mem_players', 'Players', players.length,
+        players.map(e => renderEntityRow(e, true)).join(''));
+
+    html += makeCollapsible('mem_interact', 'Objects', interactables.length,
+        interactables.map(e => renderEntityRow(e, true)).join(''), true);
 
     // 2. Containers
     const containers = asArray(g.nearby_containers);
-    document.getElementById('memContainerCount').innerText = containers.length;
-    document.getElementById('memContainerList').innerHTML = containers.map(c => {
-        if (!c.id && c.meta && c.meta.parent_id) c.id = c.meta.parent_id;
-        return renderContainer(c, `${c.object_type} (${c.x},${c.y})`, COLORS.ContainerMem);
-    }).join('');
+    html += makeCollapsible('mem_containers', 'Containers', containers.length,
+        containers.map(c => {
+            if (!c.id && c.meta && c.meta.parent_id) c.id = c.meta.parent_id;
+            return renderContainer(c, `${c.object_type} (${c.x},${c.y})`, COLORS.ContainerMem);
+        }).join(''));
 
     // 3. Vehicles
     const vehicles = asArray(g.vehicles);
-    document.getElementById('memVehCount').innerText = vehicles.length;
-    document.getElementById('memVehList').innerHTML = vehicles.map(v => {
-        // Check if memory has full parts or just simplified
-        const parts = asArray(v.parts || (v.properties ? v.properties.parts : []));
-        const partsWithContainer = parts.filter(p => p.container || p.items);
-        let partsHtml = "";
-
-        if (partsWithContainer.length > 0) {
-            partsHtml = partsWithContainer.map(p => {
-                const pName = p.id || p.name || "Part";
-                return renderContainer(p, pName, "#888");
-            }).join('');
-        } else {
-            partsHtml = `<div style="margin-left:10px; color:#555;">No container info</div>`;
-        }
-
-        let vId = v.id || "??";
-        vId = vId.replace("vehicle_", "");
-
-        return `<div class="item-row" style="border-left: 2px solid ${COLORS.VehicleMem}; padding-left:8px;">
-            <div style="color:${COLORS.VehicleMem}; font-weight:bold;">${v.object_type || 'Unknown'} [#${vId}] (${v.x.toFixed(1)},${v.y.toFixed(1)}) ${getTTL(v)}</div>
-            ${partsHtml}
-        </div>`;
-    }).join('');
+    html += makeCollapsible('mem_vehicles', 'Vehicles', vehicles.length,
+        vehicles.map(v => {
+            const parts = asArray(v.parts || (v.properties ? v.properties.parts : []));
+            const partsWithContainer = parts.filter(p => p.container || p.items);
+            let partsHtml = "";
+            if (partsWithContainer.length > 0) {
+                partsHtml = partsWithContainer.map(p => {
+                    const pName = p.id || p.name || "Part";
+                    return renderContainer(p, pName, "#888");
+                }).join('');
+            } else {
+                partsHtml = `<div style="margin-left:10px; color:#555;">No container info</div>`;
+            }
+            let vId = v.id || "??";
+            vId = vId.replace("vehicle_", "");
+            return `<div class="item-row" style="border-left: 2px solid ${COLORS.VehicleMem}; padding-left:8px;">
+                <div style="color:${COLORS.VehicleMem}; font-weight:bold;">${v.object_type || 'Unknown'} [#${vId}] (${v.x.toFixed(1)},${v.y.toFixed(1)}) ${getTTL(v)}</div>
+                ${partsHtml}
+            </div>`;
+        }).join(''));
 
     // 4. Memory Signals
     const signals = asArray(g.signals);
-    if (document.getElementById('memSignalCount')) {
-        document.getElementById('memSignalCount').innerText = signals.length;
-        document.getElementById('memSignalList').innerHTML = signals.map(s => {
+    html += makeCollapsible('mem_signals', 'Signals', signals.length,
+        signals.map(s => {
             const col = s.type === 'TV' ? '#0077BB' : '#00BB00'; // Darker for memory
             return `<div class="item-row" style="border-left: 3px solid ${col}; padding-left:8px; opacity: 0.8;">
                         <div style="font-weight: bold; color: #ccc;">${s.name || 'Unknown Device'}</div>
                         <div style="font-size: 0.8em; color: #888;">Ch: ${s.channel} ${getTTL(s)}</div>
                         <div style="font-size: 0.9em; color: #ddd; margin-top: 2px; font-style: italic;">"${s.msg || '...'}"</div>
                      </div>`;
-        }).join('');
-    }
+        }).join(''));
+
+    memContent.innerHTML = html;
 }
 
 function updateRaw(s) { document.getElementById('rawJson').innerText = JSON.stringify(s, null, 2); }
@@ -716,6 +836,7 @@ function renderMap(grid, state) {
             offCtx.globalAlpha = 0.3;
             offCtx.beginPath(); offCtx.arc(pos.x + TILE_SIZE / 2, pos.y + TILE_SIZE / 2, TILE_SIZE * 3, 0, 6.28); offCtx.stroke();
             offCtx.globalAlpha = 1.0;
+            offCtx.lineWidth = 1; // Reset line width after drawing signals
         });
 
         // Live Sounds
@@ -779,6 +900,15 @@ async function poll() {
             }
         }
 
+        // Sync Control State
+        if (data.control_data) {
+            const toggle = document.getElementById('autopilotToggle');
+            const backendState = data.control_data.autopilot || false;
+            if (toggle.checked !== backendState) {
+                toggle.checked = backendState;
+            }
+        }
+
     } catch (e) {
         console.error(e);
     }
@@ -786,6 +916,88 @@ async function poll() {
 }
 
 const REFRESH_RATE = 200; // 5Hz UI Refresh
+
+// Execute Action (New)
+window.executeAction = async (type, params) => {
+    // Check Autopilot State first (Client Side Check)
+    const toggle = document.getElementById('autopilotToggle');
+    if (toggle.checked) {
+        alert("Cannot execute manual actions while Autopilot is ON.");
+        return;
+    }
+
+    console.log(`Executing ${type}`, params);
+    try {
+        const res = await fetch('/execute', {
+            method: 'POST',
+            body: JSON.stringify({ type: type, params: params })
+        });
+        if (res.status === 409) {
+            alert("Autopilot is Enabled. Please disable it to control manually.");
+        } else if (res.status !== 200) {
+            alert("Action Failed: " + res.status);
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Network Error");
+    }
+};
+
+window.renderActionButtons = (e) => {
+    let btns = "";
+    const style = "margin-left:5px; font-size:0.75em; padding:1px 5px; cursor:pointer; font-weight:bold; min-width:45px;";
+
+    // Normalize meta
+    const meta = e.meta || e.properties || e;
+
+    // Interactables
+    if (['Door', 'Window', 'Light', 'Stove', 'Generator', 'TV', 'Radio'].includes(e.type)) {
+
+        // 1. Lock/Unlock Toggle
+        if (e.type === 'Window' || e.type === 'Door') {
+            if (meta.locked === true) {
+                // Locked -> Show Red "Locked", Action "Unlock"
+                btns += `<button onclick="executeAction('Unlock', {targetId: '${e.id}'})" style="${style} background:#411; color:#f66; border:1px solid #733;">Locked</button>`;
+            } else {
+                // Unlocked -> Show Green "Unlocked", Action "Lock"
+                btns += `<button onclick="executeAction('Lock', {targetId: '${e.id}'})" style="${style} background:#131; color:#6f6; border:1px solid #363;">Unlocked</button>`;
+            }
+        }
+
+        // 2. Interact Toggle (Open/Close)
+        let intText = "Int";
+        let intStyle = style + " background:#333; color:#ccc; border:1px solid #555;";
+
+        if (e.type === 'Window' || e.type === 'Door') {
+            if (meta.open === true) {
+                // Open -> Show Green "Open", Action Interact (Close)
+                intText = "Open";
+                intStyle = style + " background:#242; color:#cfc; border:1px solid #464;";
+            } else {
+                // Closed -> Show Gray/Red "Closed", Action Interact (Open)
+                intText = "Closed";
+                intStyle = style + " background:#444; color:#aaa; border:1px solid #666;";
+            }
+        } else if (e.type === 'Light' || e.type === 'TV' || e.type === 'Radio') {
+            if (meta.activated === true) {
+                intText = "ON";
+                intStyle = style + " background:#242; color:#cfc; border:1px solid #464;";
+            } else {
+                intText = "OFF";
+                intStyle = style + " background:#444; color:#aaa; border:1px solid #666;";
+            }
+        }
+
+        btns += `<button onclick="executeAction('Interact', {targetId: '${e.id}'})" style="${intStyle}">${intText}</button>`;
+    }
+
+    // Attackables
+    if (['Zombie', 'Player', 'Animal'].includes(e.type)) {
+        btns += `<button onclick="executeAction('Attack', {targetId: '${e.id}'})" style="${style} background:#500; color:#fff; border:1px solid #700;">Atk</button>`;
+    }
+
+    return btns;
+};
 
 // Toggle Autopilot
 document.getElementById('autopilotToggle').addEventListener('change', function (e) {

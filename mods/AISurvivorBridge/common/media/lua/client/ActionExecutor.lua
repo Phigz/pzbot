@@ -29,7 +29,7 @@ local function getHandler(actionType)
         end
     end
     
-    print(TAG .. "No handler found for action type: " .. actionType)
+    -- print(TAG .. "No handler found for action type: " .. actionType)
     return nil
 end
 
@@ -48,12 +48,18 @@ handlers["togglecrouch"]  = require("Actions/Handler_ToggleCrouch") -- Alias
 handlers["wait"]    = require("Actions/Handler_Wait")
 handlers["sit"]     = require("Actions/Handler_Sit")
 handlers["debug_spawn"] = require("Actions/Handler_DebugSpawn")
+handlers["interact"] = require("Actions/Handler_Interact")
+handlers["attack"] = require("Actions/Handler_Attack")
+handlers["consume"] = require("Actions/Handler_Consume")
+handlers["transfer"] = require("Actions/Handler_Transfer")
+handlers["loot"] = require("Actions/Handler_Transfer") -- Alias for Transfer
+
 
 -- Returns true if accepted, false if rejected/error.
 function ActionExecutor.execute(action, player)
     if not action or not action.type then return false end
 
-    print(TAG .. "[BotCommand] Dispatching action: " .. action.type)
+    -- print(TAG .. "[BotCommand] Dispatching action: " .. action.type)
 
     local handler = getHandler(action.type)
     if handler then
@@ -64,11 +70,13 @@ function ActionExecutor.execute(action, player)
     return false
 end
 
--- Probe for Sit Actions
-print("[AISurvivorBridge] PROBE STARTING: Searching for 'Sit'...")
+-- Probe for Action Classes
+print("[AISurvivorBridge] PROBE STARTING: Searching for Actions...")
 for k, v in pairs(_G) do
-    if type(k) == "string" and string.find(k, "Sit") then
-        print("[AISurvivorBridge] PROBE FOUND: " .. k)
+    if type(k) == "string" then
+        if string.find(k, "Lock") or string.find(k, "Unlock") then
+            print("[AISurvivorBridge] PROBE FOUND: " .. k)
+        end
     end
 end
 print("[AISurvivorBridge] PROBE COMPLETE.")

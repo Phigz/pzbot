@@ -58,6 +58,16 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                     except:
                         pass
 
+                # 3. Read Runtime Control (Config)
+                zomboid_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+                control_path = os.path.join(zomboid_root, 'pzbot/config/runtime_control.json')
+                if os.path.exists(control_path):
+                     try:
+                        with open(control_path, 'r') as f:
+                            response_data["control_data"] = json.load(f)
+                     except:
+                        pass
+
             except Exception as e:
                 response_data["error"] = str(e)
 
@@ -89,6 +99,71 @@ class RequestHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(b'{"status":"ok"}')
             except Exception as e:
                 print(f"Control Error: {e}")
+                self.send_response(500)
+                self.end_headers()
+        elif self.path == '/execute':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            
+            try:
+                action_req = json.loads(post_data.decode('utf-8'))
+                print(f"Received Execute Request: {action_req}")
+
+                zomboid_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+                control_path = os.path.join(zomboid_root, 'pzbot/config/runtime_control.json')
+                
+                # Check Autopilot Safety
+                is_autopilot = False
+                if os.path.exists(control_path):
+                     try:
+                        with open(control_path, 'r') as f:
+                            ctl = json.load(f)
+                            is_autopilot = ctl.get("autopilot", False)
+                     except: pass
+                
+                if is_autopilot:
+                    print("Refusing /execute: Autopilot is ENABLED.")
+                    self.send_response(409) # Conflict
+                    self.end_headers()
+                    self.wfile.write(b'{"error":"Autopilot enabled. Disable first."}')
+                    return
+
+                # Write to input.json directly
+                input_path = os.path.join(zomboid_root, 'mods/AISurvivorBridge/common/input.json')
+                
+                if not os.path.exists(input_path):
+                    # fallback
+                     input_path = os.path.join(zomboid_root, 'Lua/AISurvivorBridge/input.json')
+
+                # Read current seq
+                seq = 0
+                try:
+                    with open(input_path, 'r') as f:
+                        curr = json.load(f)
+                        seq = curr.get("sequence_number", 0)
+                except: pass
+                
+                # Format New Action Packet
+                import uuid
+                new_packet = {
+                    "sequence_number": seq + 1,
+                    "clear_queue": action_req.get("clear_queue", False),
+                    "actions": [{
+                        "id": str(uuid.uuid4()),
+                        "type": action_req["type"],
+                        "params": action_req["params"]
+                    }]
+                }
+                
+                with open(input_path, 'w') as f:
+                    json.dump(new_packet, f)
+                    
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b'{"status":"ok"}')
+                
+            except Exception as e:
+                print(f"Execute Error: {e}")
                 self.send_response(500)
                 self.end_headers()
         else:

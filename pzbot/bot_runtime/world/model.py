@@ -60,6 +60,10 @@ class WorldModel(WorldView):
     def vision(self) -> Optional[Vision]:
         return self.current_state.vision if self.current_state else None
 
+    # --- Grid Delegation ---
+    def get_tile(self, x: int, y: int, z: int = 0):
+        return self.grid.get_tile(x, y, z)
+
     # --- WorldView Implementation ---
 
     def get_entities(self, type_filter: Optional[str] = None) -> list[EntityData]:

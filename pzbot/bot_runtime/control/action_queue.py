@@ -11,6 +11,9 @@ class ActionType(str, Enum):
     ATTACK = "Attack"
     LOOT = "Loot"
     EQUIP = "Equip"
+    INTERACT = "Interact"
+    CONSUME = "Consume"
+    DROP = "Drop"
 
 @dataclass
 class Action:

@@ -76,3 +76,49 @@ This document serves as a catchment area for high-level ideas, feature concepts,
 ### 5. Contextual Event Broadcasting
 *   **What**: An event-driven queue in `state.json` for transient game events (e.g., "Glass Shattered", "Bite Received").
 *   **Why**: Polling every 100ms might miss a frame-perfect event. An explicit event logs ensures the Python brain catches every critical sound or injury.
+
+---
+
+## 🧠 Session: January 2026 (Expansion Pack)
+*New ideas focused on Offline Learning, Advanced Analysis, and "Side-Quests".*
+
+### 1. Offline Learning / Memory Consolidation ("The Dream")
+*   **Concept**: A standalone analyzer that runs between game sessions (or when the bot is "sleeping").
+*   **Mechanism**:
+    *   Parse `blackbox.log` and session recordings.
+    *   Identify "Death Locations" and "Resource Hotspots".
+    *   Update a persistent `long_term_memory.json` that biases future pathfinding (e.g., "Avoid the Mall entrance, I died there 3 times").
+*   **Goal**: Create a sense of evolving wisdom that persists across reboots.
+
+### 2. Tactical Geometry Analyzer (Combat Side-Quest)
+*   **Concept**: A dedicated math module for real-time tactical analysis.
+*   **Features**:
+    *   **Choke Point Detection**: Identify doorways/hallways as high-value combat zones.
+    *   **Flank Awareness**: Calculate zombie vectors to detect encirclement before it happens.
+    *   **Kiting Lanes**: Pre-calculate clear escape routes for "fighting while retreating".
+
+### 3. The "Base Manager" Strategy
+*   **Concept**: A specialized high-level strategy for when the bot finds a "Safe House".
+*   **Activities**:
+    *   **Inventory Sort**: Move food to fridge, weapons to cupboards.
+    *   **Barricading**: Detect windows and apply planks.
+    *   **Maintenance**: Clean blood, turn off lights to save power.
+*   **Why**: Adds "cozy" human-like behavior and utility beyond just surviving.
+
+### 4. Genetic Tuning ("Darwin's Bot")
+*   **Concept**: Use the **Scenario Director** to run automated combat trials with varying parameters (e.g., Aggression 0.5 vs 0.8).
+*   **Goal**: Automatically find the optimal tuning for specific scenarios (e.g., "What is the best retreat distance for a Horde of 10?").
+
+### 5. "The Compass" (Exploration Heuristic)
+*   **Concept**: A heatmap-based exploration driver.
+*   **Mechanism**:
+    *   Divide the world into chunks.
+    *   Track "Time Since Last Visit" for each chunk.
+    *   Drive the bot to "Stale" chunks to ensure the map is kept up-to-date.
+
+### 6. External "Mission Control" Dashboard
+*   **Concept**: A separate Python web app (Dash/Streamlit) for post-session analysis.
+*   **Metrics**:
+    *   Survival Time averages.
+    *   Kill/Death ratios.
+    *   Resource gathering efficiency (Calories found per hour).

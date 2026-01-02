@@ -7,6 +7,59 @@ local TAG = "[AISurvivorBridge-Sensor] "
 
 print(TAG .. "Loading...")
 
+-- HELPER: Process Item (Global within module)
+local function processSensorItem(item)
+    if not item then return nil end
+    local id = tostring(item:getID())
+    
+     -- 0-1 Normalized Condition
+    local cond = 0
+    if item.getConditionMax and item.getCondition then
+        local max = item:getConditionMax()
+        if max > 0 then cond = item:getCondition() / max end
+    end
+    
+    local isDamageable = false
+    if item.isDamageable then isDamageable = item:isDamageable() end
+    
+    local d = {
+        id = id,
+        type = item:getFullType(),
+        name = item:getName(),
+        cat = tostring(item:getCategory()),
+        weight = item:getActualWeight(),
+        cond = cond,
+        isDamageable = isDamageable,
+        count = 1
+    }
+    
+    if instanceof(item, "HandWeapon") then
+         d.minDmg = item:getMinDamage()
+         d.maxDmg = item:getMaxDamage()
+         d.crit = item:getCriticalChance()
+    end
+    
+    -- Check for nested items (Bag, KeyRing, etc.)
+    if item.getInventory then
+        local inv = item:getInventory()
+        if inv and not inv:isEmpty() then
+            d.items = {}
+            local subItems = inv:getItems()
+            for j=0, subItems:size()-1 do
+                local sub = subItems:get(j)
+                -- Avoid infinite recursion if item contains itself (unlikely but possible)
+                if sub ~= item then
+                     local subData = processSensorItem(sub) 
+                     if subData then
+                          table.insert(d.items, subData)
+                     end
+                end
+            end
+        end
+    end
+    return d
+end
+
 local function getSquare(x, y, z)
     local cell = getCell()
     if not cell then return nil end
@@ -219,17 +272,6 @@ local function getActorInfo(actor, player)
                 end
             end
         end)
-
-
-
-        -- Debug Print (Can silence later)
-        -- print("[SENSOR-PROBE] Animal Stats: Breed="..tostring(meta.breed).." Spp="..tostring(meta.species).." Fem="..tostring(meta.isFemale).." Age="..tostring(meta.age).." Health="..tostring(meta.health))
-    
-    -- 3. PLAYER LOGIC
-    elseif instanceof(actor, "IsoPlayer") then
-
-        -- Debug Print (Can silence later)
-        -- print("[SENSOR-PROBE] Animal Stats: Breed="..tostring(meta.breed).." Spp="..tostring(meta.species).." Fem="..tostring(meta.isFemale).." Age="..tostring(meta.age).." Health="..tostring(meta.health))
     
     -- 3. PLAYER LOGIC
     elseif instanceof(actor, "IsoPlayer") then
@@ -335,9 +377,224 @@ local function getSignals(player)
     return signals
 end
 
--- Scan radius around player
--- gridRadius: Used for expensive tile/static object scanning (default 10-15)
--- Zombies are scanned with a fixed long-range radius (50)
+local function classifySprite(sName)
+    if not sName then return nil end
+    
+    -- 1. Trees
+    if (string.find(sName, "tree") and not string.find(sName, "street")) 
+       or string.find(sName, "_american_") or string.find(sName, "_canadian_") then
+        return "Tree"
+    end
+    
+    -- 2. Fences & Walls
+    if string.find(sName, "fencing") or string.find(sName, "walls_interior") then 
+        return "FenceLow"
+    end
+    if string.find(sName, "walls_exterior_house") then return "Wall" end
+    if string.find(sName, "walls_exterior") then return "FenceHigh" end
+    
+    -- 3. Street / Pavement
+    if string.find(sName, "street") then return "Street" end
+    
+    -- 4. Floors (Interior)
+    if string.find(sName, "floors_interior") or string.find(sName, "floors_rugs") then return "Floor" end
+    
+    -- 5. Vegetation (Catch-all)
+    if string.find(sName, "vegetation") or string.find(sName, "blends_natural") or string.find(sName, "grass") then
+        return "Vegetation"
+    end
+    
+    return nil
+end
+
+local function scanSquare(vision, x, y, z, px, py, playerIndex)
+    local sq = getSquare(x, y, z)
+    local distSq = (x-px)*(x-px) + (y-py)*(y-py)
+    local isClose = distSq < (8*8)
+    
+    if sq and (sq:isSeen(playerIndex) or isClose) then
+        local isWalkable = sq:isFree(false)
+        local tileData = { x = x, y = y, z = z, w = isWalkable }
+             
+        -- INTERACTIBLES SCAN
+        local inters = getInteractibleData(sq)
+        for _, inter in ipairs(inters) do
+             table.insert(vision.objects, inter)
+        end
+        
+        local room = sq:getRoom()
+        if room then
+            tileData.room = room:getName()
+        end
+
+        local layer = nil
+         -- 1. Check Objects (Trees, Fences, etc.)
+         local objs = sq:getObjects()
+         if objs then
+            for i=0, objs:size()-1 do
+                local o = objs:get(i)
+                if instanceof(o, "IsoTree") then 
+                    layer = "Tree"
+                    break 
+                end
+                local sprite = o:getSprite()
+                if sprite and sprite:getName() then
+                    local found = classifySprite(tostring(sprite:getName()))
+                    if found then
+                        layer = found
+                        if layer == "Tree" or layer == "Wall" or layer == "FenceHigh" then break end
+                    end
+                end
+            end
+         end
+         
+         -- 2. Check Floor
+         if not layer then
+            local floor = sq:getFloor()
+            if floor then
+                local sprite = floor:getSprite()
+                if sprite and sprite:getName() then
+                    layer = classifySprite(tostring(sprite:getName()))
+                end
+            end
+         end
+         
+         if layer then
+            tileData.layer = layer
+         end
+         
+         table.insert(vision.tiles, tileData)
+
+        -- Static Object Info (Windows, Doors, Containers)
+        if sq then
+            local rawObjs = sq:getObjects()
+            if rawObjs then
+                for i=0, rawObjs:size()-1 do
+                    local obj = rawObjs:get(i)
+                    local objType = nil
+                    local meta = {}
+
+                    if instanceof(obj, "IsoWindow") then
+                        objType = "Window"
+                        meta.open = obj:getSprite() and obj:getSprite():getName() and string.find(tostring(obj:getSprite():getName()), "open")
+                        if obj.isLocked then meta.locked = obj:isLocked() end
+                        if obj.isPermaLocked then meta.perma = obj:isPermaLocked() end 
+                    elseif instanceof(obj, "IsoDoor") then
+                        objType = "Door"
+                        meta.open = obj:IsOpen()
+                        if obj.isLocked then meta.locked = obj:isLocked() end
+                        if obj.isLockedByKey then meta.keyLocked = obj:isLockedByKey() end
+                        if obj.getKeyId and obj:getKeyId() ~= -1 then meta.hasKeyId = true end
+                    elseif instanceof(obj, "IsoContainer") then
+                        if not instanceof(obj, "IsoMovingObject") then
+                            local c = obj:getContainer()
+                            local contData = {
+                                id = x .. "_" .. y .. "_" .. i,
+                                object_type = c:getType(),
+                                x = x, y = y, z = z,
+                                items = {}
+                            }
+                            
+                            if not c:isEmpty() then
+                                local items = c:getItems()
+                                for j=0, items:size()-1 do
+                                    local item = items:get(j)
+                                    local ok, iData = pcall(processSensorItem, item)
+                                    if ok and iData then
+                                        table.insert(contData.items, iData)
+                                    end
+                                end
+                            end
+                            table.insert(vision.nearby_containers, contData)
+                            objType = nil 
+                        end
+                    end
+                    
+                    -- SIGNAL/DEVICE
+                    if instanceof(obj, "IsoTelevision") or instanceof(obj, "IsoRadio") then
+                         local deviceData = nil
+                         if obj.getDeviceData then deviceData = obj:getDeviceData() end
+                         if deviceData then
+                             local isPower = false
+                             if deviceData.getIsTurnedOn then isPower = deviceData:getIsTurnedOn() end
+                             local chan = -1
+                             if deviceData.getChannel then chan = deviceData:getChannel() end
+                             local vol = 0.0
+                             if deviceData.getDeviceVolume then vol = deviceData:getDeviceVolume() end
+                             local dName = "Unknown"
+                             if deviceData.getDeviceName then dName = deviceData:getDeviceName() end
+                             local mediaTitle = nil
+                             local mediaCat = nil
+                             if deviceData.hasMedia and deviceData:hasMedia() and deviceData.getMediaData then
+                                 local media = deviceData:getMediaData()
+                                 if media then
+                                     if media.getTitle then mediaTitle = media:getTitle() 
+                                     elseif media.getName then mediaTitle = media:getName() end
+                                     if media.getCategory then mediaCat = media:getCategory() end
+                                 end
+                             end
+                             local sType = "Radio"
+                             if instanceof(obj, "IsoTelevision") then sType = "TV" end
+                             local deviceMsg = nil
+                             if mediaTitle then
+                                 deviceMsg = "Media: " .. tostring(mediaTitle)
+                                 if mediaCat then deviceMsg = deviceMsg .. " (" .. tostring(mediaCat) .. ")" end
+                             end
+
+                             table.insert(vision.signals, {
+                                 x = x, y = y, z = z,
+                                 type = sType,
+                                 name = dName,
+                                 on = isPower,
+                                 channel = chan,
+                                 volume = vol,
+                                 msg = deviceMsg
+                             })
+                         end
+                    end
+
+                    -- CONTAINER FALLBACK
+                    if not objType and obj:getContainer() and not instanceof(obj, "IsoMovingObject") then
+                         local c = obj:getContainer()
+                         local contData = {
+                             id = x .. "_" .. y .. "_" .. i,
+                             object_type = c:getType(),
+                             x = x, y = y, z = z,
+                             items = {}
+                         }
+                         if not c:isEmpty() then
+                             local items = c:getItems()
+                             for j=0, items:size()-1 do
+                                 local item = items:get(j)
+                                 local ok, iData = pcall(processSensorItem, item)
+                                 if ok and iData then
+                                     table.insert(contData.items, iData)
+                                 end
+                             end
+                         end
+                         table.insert(vision.nearby_containers, contData)
+                         objType = nil
+                    end
+
+                    if objType then
+                        local oDx = x - px
+                        local oDy = y - py
+                        local dist = math.sqrt(oDx*oDx + oDy*oDy)
+                        meta.dist = dist
+                        meta.reachable = (dist <= 2.0)
+                        table.insert(vision.objects, {
+                            id = x .. "_" .. y .. "_" .. i,
+                            type = objType,
+                            x = x, y = y, z = z,
+                            meta = meta
+                        })
+                    end
+                end
+            end
+        end
+    end
+end
+
 function Sensor.scan(player, gridRadius)
     local ZOMBIE_RADIUS = 50.0
 
@@ -347,7 +604,8 @@ function Sensor.scan(player, gridRadius)
         tiles = {},   
         objects = {},
         neighbors = {},
-        -- sounds = {}, -- Removed: LastHeard data is ambiguous (Location only)
+        nearby_containers = {},
+        vehicles = {}, 
         signals = getSignals(player) 
     }
 
@@ -388,12 +646,9 @@ function Sensor.scan(player, gridRadius)
         }
     end
 
-    -- 2. DYNAMIC OBJECT SCAN (Global List)
-    -- 2. DYNAMIC OBJECT SCAN (Global List)
     -- 2. DYNAMIC ACTOR SCAN (Global List)
-    -- We now scan ALL IsoGameCharacters (Zombies, Players) AND IsoAnimals explicitly
     local allObjects = getCell():getObjectList()
-    local zCount = 0 -- Keep var name for compatibility, effectively "Generic Count"
+    local zCount = 0
     vision.debug_z = { total = -1, scan_log = "" }
 
     if allObjects then
@@ -406,29 +661,22 @@ function Sensor.scan(player, gridRadius)
             -- Filter: Must be Character OR Animal
             if obj and (instanceof(obj, "IsoGameCharacter") or instanceof(obj, "IsoAnimal")) then
                 
-                -- SELF CHECK LOGGING
                 local isSelf = (obj == player)
-                
                 if not isSelf then
                     local dx = obj:getX() - player:getX()
                     local dy = obj:getY() - player:getY()
                     local dist = math.sqrt(dx*dx + dy*dy)
                     
-                    -- Use ZOMBIE_RADIUS as general "Entity Radius" (50 tiles)
                     if dist <= ZOMBIE_RADIUS then
                         local zSq = obj:getCurrentSquare()
                         local seen = zSq and zSq:isSeen(playerIndex)
-                        
-                        -- BYPASS: Allow Animals even if not seen (for debugging/tracking)
                         local forceInclude = instanceof(obj, "IsoAnimal")
                         
                         if seen or forceInclude then
                             local info = getActorInfo(obj, player)
-                            -- print("[SENSOR-ADD] Adding Entity: Type="..tostring(info.type).." ID="..tostring(info.id).." Class="..tostring(obj:getClass():getSimpleName()))
                             table.insert(vision.objects, info)
                             zCount = zCount + 1
                         else
-                             -- DEBUG: Log why Animal wasn't seen
                              if instanceof(obj, "IsoAnimal") then
                                  local sqStr = "nil"
                                  if zSq then sqStr = tostring(zSq:getX())..","..tostring(zSq:getY()) end
@@ -436,18 +684,13 @@ function Sensor.scan(player, gridRadius)
                              end
                         end
                     end
-                else
-                    -- Log self-skipping to double check logic
-                    -- print("[SENSOR-SKIP] Skipping Self: " .. tostring(obj:getID()))
                 end
             end
         end
         vision.debug_z.scan_log = log_str
     end
-    -- print(TAG .. "Scan: Global=" .. (zombies and zombies:size() or 0) .. " Visible=" .. zCount)
 
     -- 3. STATIC GRID SCAN (Tiles & Static Objects)
-    -- Iterate grid for map data and static objects (Windows, Doors)
     local startX = px - gridRadius
     local endX   = px + gridRadius
     local startY = py - gridRadius
@@ -455,262 +698,22 @@ function Sensor.scan(player, gridRadius)
 
     for x = startX, endX do
         for y = startY, endY do
-            local sq = getSquare(x, y, pz)
-            if sq and sq:isSeen(playerIndex) then
-                -- Tile Info
-                local isWalkable = sq:isFree(false)
-                -- Always include tile if seen, even if blocked (so we can see Walls/Trees)
-                local tileData = { x = x, y = y, z = pz, w = isWalkable }
-                     
-                -- INTERACTIBLES SCAN
-                -- Scan for functional objects on this square
-                local inters = getInteractibleData(sq)
-                for _, inter in ipairs(inters) do
-                     table.insert(vision.objects, inter)
-                end
-                
-                -- Room Logic
-                local room = sq:getRoom()
-                if room then
-                    tileData.room = room:getName()
-                end
-
-                     -- Semantic Layer Logic (Refactored)
-                     local layer = nil
-                     
-                     -- Classification Rules (Priority Order: Higher index = Lower priority check, but we break on success)
-                     -- Actually, we want specific matches to win.
-                     -- Let's check objects first (Trees, Walls), then overlays, then Floor.
-                     
-                     local function classifySprite(sName)
-                        if not sName then return nil end
-                        
-                        -- 1. Trees (Explicitly exclude 'street' to prevent false positives)
-                        if (string.find(sName, "tree") and not string.find(sName, "street")) 
-                           or string.find(sName, "_american_") or string.find(sName, "_canadian_") then
-                            return "Tree"
-                        end
-                        
-                        -- 2. Fences & Walls
-                        if string.find(sName, "fencing") or string.find(sName, "walls_interior") then 
-                            return "FenceLow"
-                        end
-                        if string.find(sName, "walls_exterior_house") then return "Wall" end
-                        if string.find(sName, "walls_exterior") then return "FenceHigh" end
-                        
-                        -- 3. Street / Pavement
-                        if string.find(sName, "street") then return "Street" end
-                        
-                        -- 4. Floors (Interior)
-                        if string.find(sName, "floors_interior") or string.find(sName, "floors_rugs") then return "Floor" end
-                        
-                        -- 5. Vegetation (Catch-all)
-                        if string.find(sName, "vegetation") or string.find(sName, "blends_natural") or string.find(sName, "grass") then
-                            return "Vegetation"
-                        end
-                        
-                        return nil
-                     end
-                     
-                     -- 1. Check Objects (Trees, Fences, etc.)
-                     local objs = sq:getObjects()
-                     if objs then
-                        for i=0, objs:size()-1 do
-                            local o = objs:get(i)
-                            
-                            -- IsoTree override
-                            if instanceof(o, "IsoTree") then 
-                                layer = "Tree"
-                                break 
-                            end
-                            
-                            local sprite = o:getSprite()
-                            if sprite and sprite:getName() then
-                                local found = classifySprite(tostring(sprite:getName()))
-                                if found then
-                                    layer = found
-                                    -- High priority layers break the loop immediately
-                                    if layer == "Tree" or layer == "Wall" or layer == "FenceHigh" then break end
-                                end
-                            end
-                        end
-                     end
-                     
-                     -- 2. Check Floor (if no dominant object layer found yet)
-                     if not layer then
-                        local floor = sq:getFloor()
-                        if floor then
-                            local sprite = floor:getSprite()
-                            if sprite and sprite:getName() then
-                                layer = classifySprite(tostring(sprite:getName()))
-                            end
-                        end
-                     end
-                     
-                     if layer then
-                        tileData.layer = layer
-                     end
-                     
-                     table.insert(vision.tiles, tileData)
-
-                -- Static Object Info
-                -- Skip zombies here as we already got them
-                local rawObjs = sq:getObjects()
-                if rawObjs then
-                    for i=0, rawObjs:size()-1 do
-                        local obj = rawObjs:get(i)
-                        local objType = nil
-                        local meta = {}
-
-                        -- Only check static interactive objects
-                        if instanceof(obj, "IsoWindow") then
-                            objType = "Window"
-                            meta.open = obj:getSprite() and obj:getSprite():getName() and string.find(tostring(obj:getSprite():getName()), "open")
-                        elseif instanceof(obj, "IsoDoor") then
-                            objType = "Door"
-                            meta.open = obj:IsOpen()
-                        elseif instanceof(obj, "IsoContainer") then
-                            -- Only verify it's not on a zombie/player (for safety, though unlikely in static list)
-                            if not instanceof(obj, "IsoMovingObject") then
-                                objType = "Container"
-                                meta.cat = obj:getContainer():getType()
-                            end
-                        end
-                        
-                        -- SIGNAL/DEVICE SCAN (Grid Based)
-                        if instanceof(obj, "IsoTelevision") or instanceof(obj, "IsoRadio") then
-                             local deviceData = nil
-                             if obj.getDeviceData then deviceData = obj:getDeviceData() end
-                             
-                             if deviceData then
-                                 local isPower = false
-                                 if deviceData.getIsTurnedOn then isPower = deviceData:getIsTurnedOn() end
-                                 
-                                 local chan = -1
-                                 if deviceData.getChannel then chan = deviceData:getChannel() end
-                                 
-                                 local vol = 0.0
-                                 if deviceData.getDeviceVolume then vol = deviceData:getDeviceVolume() end
-                                 
-                                 local dName = "Unknown"
-                                 if deviceData.getDeviceName then dName = deviceData:getDeviceName() end
-                                 
-                                 -- Media / VHS Check
-                                 local mediaTitle = nil
-                                 local mediaCat = nil
-                                 if deviceData.hasMedia and deviceData:hasMedia() and deviceData.getMediaData then
-                                     local media = deviceData:getMediaData()
-                                     if media then
-                                         if media.getTitle then mediaTitle = media:getTitle() 
-                                         elseif media.getName then mediaTitle = media:getName() end
-                                         
-                                         if media.getCategory then mediaCat = media:getCategory() end
-                                     end
-                                 end
-                                 
-                                 local sType = "Radio"
-                                 if instanceof(obj, "IsoTelevision") then sType = "TV" end
-                                 
-                                 local deviceMsg = nil
-                                 if mediaTitle then
-                                     deviceMsg = "Media: " .. tostring(mediaTitle)
-                                     if mediaCat then deviceMsg = deviceMsg .. " (" .. tostring(mediaCat) .. ")" end
-                                 end
-
-                                 table.insert(vision.signals, {
-                                     x = x,
-                                     y = y,
-                                     z = pz,
-                                     type = sType,
-                                     name = dName,
-                                     on = isPower,
-                                     channel = chan,
-                                     volume = vol,
-                                     msg = deviceMsg
-                                 })
-                             end
-                        end
-
-                        -- CONTAINER FALLBACK (for objects that have a container but aren't IsoContainer check above)
-                        if not objType and obj:getContainer() and not instanceof(obj, "IsoMovingObject") then
-                             objType = "Container"
-                             meta.cat = obj:getContainer():getType()
-                        end
-
-                        if objType then
-                            table.insert(vision.objects, {
-                                id = x .. "_" .. y .. "_" .. i,
-                                type = objType,
-                                x = x, y = y, z = pz,
-                                meta = meta
-                            })
-                        end
-                    end
-                end
-            end
+            scanSquare(vision, x, y, pz, px, py, playerIndex)
         end
     end
-
-    -- Helper for processing items
-    -- ID STRATEGY: We force string IDs derived from InventoryItem:getID().
-    -- Using WorldObject IDs (wi:getID()) proved unsafe/unstable.
-    -- String IDs ensure compatibility with Python's JSON parser (preventing #unknown_0_0 issues).
-    local function processSensorItem(item)
-        local id = tostring(item:getID())
-        
-        -- Removed risky WorldID check which caused crashes/ambiguity
-        
-         -- 0-1 Normalized Condition
-        local cond = 0
-        if item.getConditionMax and item.getCondition then
-            local max = item:getConditionMax()
-            if max > 0 then cond = item:getCondition() / max end
-        end
-        
-        local isDamageable = false
-        if item.isDamageable then isDamageable = item:isDamageable() end
-        
-        local d = {
-            id = id,
-            type = item:getFullType(),
-            name = item:getName(),
-            cat = tostring(item:getCategory()),
-            weight = item:getActualWeight(),
-            cond = cond,
-            isDamageable = isDamageable,
-            count = 1
-        }
-        
-        if instanceof(item, "HandWeapon") then
-             d.minDmg = item:getMinDamage()
-             d.maxDmg = item:getMaxDamage()
-             d.crit = item:getCriticalChance()
-        end
-        
-        -- Check for nested items (Bag, KeyRing, etc.)
-        if item.getInventory then
-            local inv = item:getInventory()
-            if inv and not inv:isEmpty() then
-                d.items = {}
-                local subItems = inv:getItems()
-                for j=0, subItems:size()-1 do
-                    local sub = subItems:get(j)
-                    local subData = processSensorItem(sub) 
-                    if subData then
-                         table.insert(d.items, subData)
-                    end
-                end
-            end
-        end
-        return d
+    
+    -- DEBUG: Container Visibility
+    local contCount = vision.nearby_containers and #vision.nearby_containers or 0
+    if contCount == 0 then
+        -- print(TAG.."Warning: No containers found in scan radius " .. gridRadius)
+    else
+        -- print(TAG.."Scan Found " .. contCount .. " containers.")
     end
 
     -- 4. WORLD ITEMS (Items on floor)
     vision.world_items = {}
-    -- Scan local area for WorldInventoryItems (Radius ~10 similar to visual range)
-    -- Using a slightly smaller radius for items to avoid noise
     local ITEM_SCAN_RADIUS = 10
-    local worldItems = getCell():getObjectList() -- This gets moving objects including WorldInventoryItems
+    local worldItems = getCell():getObjectList()
     if worldItems then
         for i=0, worldItems:size()-1 do
             local obj = worldItems:get(i)
@@ -722,16 +725,11 @@ function Sensor.scan(player, gridRadius)
                 if dist <= ITEM_SCAN_RADIUS then
                     local item = obj:getItem()
                     if item then
-                        -- Use shared helper
                         local data = processSensorItem(item)
-                        
-                        -- Force World Object ID (Stable)
                         data.id = tostring(obj:getID())
-                        -- Inject Position
                         data.x = math.floor(obj:getX())
                         data.y = math.floor(obj:getY())
                         data.z = math.floor(obj:getZ())
-                        
                         table.insert(vision.world_items, data)
                     end
                 end
@@ -740,11 +738,8 @@ function Sensor.scan(player, gridRadius)
     end
 
     -- 5. NEARBY CONTAINERS (Lootable)
-    -- Try to get exactly what the player sees via the Loot Window
-    vision.nearby_containers = {}
+    -- vision.nearby_containers = {} -- REMOVED: Do not clear grid-scanned containers!
     local lootWindow = nil
-    
-    -- Safety check for global getPlayerLoot function (it's part of ISUI)
     if getPlayerLoot then
         lootWindow = getPlayerLoot(playerIndex)
     end
@@ -753,7 +748,6 @@ function Sensor.scan(player, gridRadius)
         local backpacks = lootWindow.inventoryPane.inventoryPage.backpacks
         for i, containerObj in ipairs(backpacks) do
             local inventory = nil
-            -- Detect how to get inventory based on object type
             if containerObj.inventory then
                  inventory = containerObj.inventory
             elseif containerObj.getInventory then
@@ -763,17 +757,13 @@ function Sensor.scan(player, gridRadius)
                  if c then inventory = c end
             end
             
-            -- If still nil, maybe it's the inventory itself? (Some mods do this)
             if not inventory and instanceof(containerObj, "ItemContainer") then
                 inventory = containerObj
             end
             
             if inventory then
-                -- Resolving the actual World Object
-                -- We use the inventory's parent as the starting point (usually the Item or Object)
                 local startObj = inventory:getParent() 
 
-                -- Fix for Items acting as Containers (Bags, KeyRings)
                 if not startObj and inventory.getContainingItem then
                     startObj = inventory:getContainingItem()
                 end
@@ -781,35 +771,22 @@ function Sensor.scan(player, gridRadius)
                 local invType = "Unknown"
                 if inventory.getType then invType = inventory:getType() end
                 
-                -- Explicit Floor Check
-                if invType == "floor" then
-                     -- Floor "parent" is nil, so startObj remains nil.
-                     -- We handle this specifically below.
-                end 
                 local xVal, yVal, zVal = -1, -1, -1
                 local parentType = "Unknown"
                 local parentId = "Unknown"
                 
-                -- Naming Candidate (keep track of the first Item we see)
                 local nameCandidate = nil
                 if invType == "floor" then
                     nameCandidate = "Floor"
                     parentType = "World"
-                    parentId = "Floor" -- Fallback ID, will try to append coords later if possible?
-                    -- Is the Floor always World? Yes.
+                    parentId = "Floor"
                 end
                 
-                -- Iterative Parent Walk
                 local curr = startObj
                 local safety = 0
-                
-                -- DEBUG: Trace Unknown Containers
-                -- if parentType == "Unknown" (we don't know it yet) 
                 local debugChain = ""
                 if startObj then 
                      debugChain = tostring(startObj:getClass():getSimpleName()) 
-                else
-                     debugChain = "nil"
                 end
 
                 while curr and safety < 10 do
@@ -817,29 +794,23 @@ function Sensor.scan(player, gridRadius)
                     
                     if instanceof(curr, "InventoryItem") then
                         if not nameCandidate then nameCandidate = curr:getDisplayName() end
-                        
-                        -- Check if on ground
                         local wi = curr:getWorldItem()
                         if wi then
-                            curr = wi -- Jump to World Item
+                            curr = wi 
                         else
-                            -- Check Container
-                            local outer = curr:getContainer() -- The container holding this item
+                            local outer = curr:getContainer()
                             if outer then
-                                curr = outer:getParent() -- The object holding that container
+                                curr = outer:getParent()
                             else
-                                -- Equipped/Attached directly?
-                                -- Try getOutermostContainer fallback if getContainer is nil
                                 local root = curr:getOutermostContainer()
                                 if root then
                                      curr = root:getParent()
                                 else
-                                     -- Dead end or directly on player (handled below?)
                                      break
                                 end
                             end
                         end
-                    elseif instanceof(curr, "IsoGameCharacter") then -- Player, Zombie, Animal
+                    elseif instanceof(curr, "IsoGameCharacter") then 
                         parentType = "Entity"
                         -- Assign ID
                         if instanceof(curr, "IsoPlayer") then parentId = "Player" .. curr:getPlayerNum()
@@ -856,7 +827,6 @@ function Sensor.scan(player, gridRadius)
                         end
                         xVal, yVal, zVal = math.floor(curr:getX()), math.floor(curr:getY()), math.floor(curr:getZ())
                         
-                        -- Grab name if we missed it
                         if not nameCandidate and curr.getItem then
                             local item = curr:getItem()
                             if item then nameCandidate = item:getDisplayName() end
@@ -868,36 +838,29 @@ function Sensor.scan(player, gridRadius)
                         parentId = xVal .. "_" .. yVal .. "_" .. zVal
                         break
                     elseif instanceof(curr, "IsoGridSquare") then
-                        -- Found the Floor!
                         parentType = "World"
                         nameCandidate = "Floor"
                         parentId = curr:getX() .. "_" .. curr:getY() .. "_" .. curr:getZ()
                         xVal, yVal, zVal = curr:getX(), curr:getY(), curr:getZ()
                         break
                     else
-                        -- Unknown object type in chain
                         debugChain = debugChain .. " -> " .. tostring(curr:getClass():getSimpleName())
-                        -- Advance (Generic)
                         if curr.getParent then curr = curr:getParent() else break end
                     end
                 end
 
-                 -- Attempt 3: ISButton / UI Element Fallback
                 if xVal == -1 and containerObj.getX and not instanceof(containerObj, "ISButton") then 
-                    -- Only trust containerObj if it's not a UI element (buttons have screen X/Y, not world)
                      xVal = math.floor(containerObj:getX())
                 end
                 
-                -- Final Fallback: Player Position
                 if xVal == -1 or yVal == -1 then
                      xVal, yVal, zVal = px, py, pz
-                     -- If we fell back to player pos and didn't find a parent, it's likely on the player
                      if parentType == "Unknown" then parentType = "Entity" end 
                 end
 
                 local cData = {
                     type = "Container",
-                    object_type = nameCandidate or "Unknown", -- Default to Item Name if found
+                    object_type = nameCandidate or "Unknown",
                     x = xVal,
                     y = yVal,
                     z = zVal,
@@ -909,23 +872,9 @@ function Sensor.scan(player, gridRadius)
                 }
 
                 if cData.object_type == "Unknown" then
-                     -- print("[SENSOR] Unknown Container Dump:")
-                     -- print("  NameCand: " .. tostring(nameCandidate))
-                     -- print("  ParentType: " .. tostring(parentType))
-                     -- print("  ParentID: " .. tostring(parentId))
-                     -- print("  InventoryType: " .. tostring(invType))
-                     -- if containerObj and containerObj.getClass then print("  ContainerObj Class: " .. tostring(containerObj:getClass():getSimpleName())) end
-                     -- if inventory and inventory.getClass then print("  Inventory Class: " .. tostring(inventory:getClass():getSimpleName())) end
-                     -- if startObj and startObj.getClass then print("  StartObj (Parent) Class: " .. tostring(startObj:getClass():getSimpleName())) end
-                     -- print("  Chain: " .. debugChain)
-                end
-                
-                -- Determine type name (Fallback if not item)
-                if cData.object_type == "Unknown" then
                      local function getContainerName(obj)
-                        -- Try to get real name if possible (some objects have localization)
                         if obj.getContainer and obj:getContainer() and obj:getContainer():getType() then
-                            -- return obj:getContainer():getType() -- often just "crate" or "bin"
+                            -- return obj:getContainer():getType()
                         end
                         
                         local spriteName = nil
@@ -934,13 +883,11 @@ function Sensor.scan(player, gridRadius)
                         end
                         
                         if spriteName then
-                             -- Simple cleanup for standard sprites
                              local clean = spriteName
-                             clean = string.gsub(clean, "%d", "")     -- Remove numbers
-                             clean = string.gsub(clean, "_", " ")     -- Replace underscores
-                             clean = string.gsub(clean, "^%s*(.-)%s*$", "%1") -- Trim
+                             clean = string.gsub(clean, "%d", "") 
+                             clean = string.gsub(clean, "_", " ") 
+                             clean = string.gsub(clean, "^%s*(.-)%s*$", "%1")
                              
-                             -- Mappings for common prefixes
                              if string.find(spriteName, "appliances_refrigeration") then return "Fridge" end
                              if string.find(spriteName, "appliances_cooking") then return "Oven" end
                              if string.find(spriteName, "furniture_storage") then return "Shelf" end
@@ -964,10 +911,7 @@ function Sensor.scan(player, gridRadius)
                          if cData.object_type == "Container" and instanceof(startObj, "IsoDeadBody") then cData.object_type = "Corpse" end
                     end
                 end
-                
 
-
-                -- Get Items (Recursive)
                 local items = inventory:getItems()
                 for j=0, items:size()-1 do
                     local it = items:get(j)
@@ -979,7 +923,6 @@ function Sensor.scan(player, gridRadius)
             end
         end
     else
-        -- Fallback: Scan explicit 3x3 for containers
         local range = 1
         for x = px-range, px+range do
             for y = py-range, py+range do
@@ -989,7 +932,6 @@ function Sensor.scan(player, gridRadius)
                     for k=0, objs:size()-1 do
                         local o = objs:get(k)
                         if o:getContainer() then
-                             -- Add to list... (Simplified for brevity, assuming UI works mostly)
                         end
                     end
                 end
@@ -1002,7 +944,6 @@ function Sensor.scan(player, gridRadius)
     local vehicles = getCell():getVehicles()
     
     if vehicles then
-        -- print("[DEBUG] Vehicles List Size: " .. tostring(vehicles:size()))
         for i=0, vehicles:size()-1 do
             local veh = vehicles:get(i)
             if veh then
@@ -1010,8 +951,7 @@ function Sensor.scan(player, gridRadius)
                 local dy = veh:getY() - py
                 local dist = math.sqrt(dx*dx + dy*dy)
                 -- Force include for debug
-                if true then -- dist <= 40.0 then
-                    -- Minimal Safe Scan
+                if true then 
                     local vData = {
                         id = "vehicle_" .. veh:getId(),
                         type = "Vehicle",
@@ -1020,9 +960,6 @@ function Sensor.scan(player, gridRadius)
                         y = veh:getY(),
                         z = veh:getZ(),
                         meta = {
-                            -- locked = veh:isLocked(),   -- CRASHING
-                            -- hotwired = veh:isHotwired(),
-                            -- running = veh:isEngineRunning(),
                             name = veh:getScript() and veh:getScript():getName(),
                         }
                     }
@@ -1035,13 +972,12 @@ function Sensor.scan(player, gridRadius)
                             if part and part:getItemContainer() then
                                 local container = part:getItemContainer()
                                 local partData = {
-                                    id = part:getId(), -- e.g. "GloveBox"
+                                    id = part:getId(),
                                     type = "Container",
                                     capacity = container:getCapacity(),
                                     items = {}
                                 }
                                 
-                                -- Get Items
                                 local items = container:getItems()
                                 for k=0, items:size()-1 do
                                     local it = items:get(k)
