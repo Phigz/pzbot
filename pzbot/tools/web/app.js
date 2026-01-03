@@ -727,6 +727,31 @@ function updateMemory(g) {
                      </div>`;
         }).join(''));
 
+    // 5. Brain Memory
+    if (g.brain && g.brain.memory) {
+        const mem = g.brain.memory;
+
+        // Failed Loot
+        const failedItems = asArray(mem.failed_loot_items);
+        const failedHtml = failedItems.map(id =>
+            `<div class="item-row" style="color:#f88; margin-left:10px;">Item #${id}</div>`
+        ).join('');
+
+        html += makeCollapsible('mem_failed', 'Failed Loot Items', failedItems.length, failedHtml || '<div class="empty">None</div>');
+
+        // Visited Containers
+        const visitedCont = asArray(mem.visited_containers);
+        html += makeCollapsible('mem_visited_c', 'Visited Containers (IDs)', visitedCont.length,
+            `<div style="font-size:0.8em; color:#888; padding:5px; word-break:break-all;">${visitedCont.join(', ')}</div>`
+        );
+
+        // Visited Rooms
+        const visitedRooms = asArray(mem.visited_rooms);
+        html += makeCollapsible('mem_rooms', 'Visited Rooms', visitedRooms.length,
+            `<div style="font-size:0.8em; color:#aaa; padding:5px;">${visitedRooms.join(', ')}</div>`
+        );
+    }
+
     memContent.innerHTML = html;
 }
 

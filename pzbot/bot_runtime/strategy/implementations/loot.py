@@ -80,6 +80,18 @@ class LootStrategy(Strategy):
                         all_items.append(item_data)
                         
         for item in all_items:
+            # Memory Filter
+            if str(item.get('id')) in state.memory.failed_loot_items:
+                continue
+
+            # Vertical Filter: Strict Z-Level Match
+            # We cannot reach items on other floors without stairs logic (which is separate)
+            player_z = state.player.position.z if state.player else 0
+            item_z = item.get('z', 0)
+            if int(item_z) != int(player_z):
+                # logger.debug(f"Skipping item {item.get('name')} on Z={item_z} (Player Z={int(player_z)})")
+                continue
+
             s = self.score_item(item, state)
             if s > best_score:
                 best_score = s

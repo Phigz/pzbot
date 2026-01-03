@@ -104,6 +104,13 @@ def main():
                     del brain_data['vision']
                 if 'player' in brain_data:
                     del brain_data['player']
+
+                # Convert Memory Sets to Lists for JSON
+                if 'memory' in brain_data:
+                    mem = brain_data['memory']
+                    for k, v in mem.items():
+                        if isinstance(v, set):
+                            mem[k] = list(v)
                 
                 grid_data = {
                     "entities": known_entities,

@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Set
 import time
 from bot_runtime.ingest.state import Vision, Player
 
@@ -100,6 +100,16 @@ class ZoneState:
     last_update_tick: int = 0
 
 @dataclass
+class MemoryState:
+    """
+    Episodic memory of the bot's experiences.
+    Transient for now (lost on restart), but critical for loop prevention.
+    """
+    failed_loot_items: Set[str] = field(default_factory=set) # IDs of items we failed to loot
+    visited_containers: Set[str] = field(default_factory=set) # IDs of containers we've checked
+    visited_rooms: Set[str] = field(default_factory=set) # Names/IDs of rooms we've explored
+
+@dataclass
 class BrainState:
     """
     The current mental snapshot of the bot.
@@ -112,6 +122,7 @@ class BrainState:
     navigation: NavigationState = field(default_factory=NavigationState)
     situation: SituationState = field(default_factory=SituationState)
     zone: ZoneState = field(default_factory=ZoneState)
+    memory: MemoryState = field(default_factory=MemoryState)
     vision: Optional[Vision] = None # Raw sensory input (Context)
     player: Optional[Player] = None # Physical self (Body, Inventory, Flags)
     

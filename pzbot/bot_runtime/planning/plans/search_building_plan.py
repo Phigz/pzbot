@@ -6,6 +6,7 @@ from bot_runtime.brain.state import BrainState
 from bot_runtime.control.action_queue import Action, ActionType
 from bot_runtime.planning.base import Plan, PlanStatus
 from bot_runtime.planning.plans.loot_plan import LootPlan
+from bot_runtime.planning.utils.navigator_helper import NavigatorHelper
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ class SearchBuildingPlan(Plan):
     def __init__(self, start_x: int, start_y: int, mode="LOOT_AS_YOU_GO"):
         super().__init__(f"SearchBuilding({start_x},{start_y})")
         self.mode = mode
-        self.visited_rooms: Set[str] = set()
+        # self.visited_rooms is now in state.memory.visited_rooms
         self.known_rooms = {} # name -> center_pos {x,y}
         self.current_room = None
         
@@ -53,9 +54,9 @@ class SearchBuildingPlan(Plan):
                 break
         
         if current_room_name != "Unknown":
-            if current_room_name not in self.visited_rooms:
+            if current_room_name not in state.memory.visited_rooms:
                 logger.info(f"[SearchPlan] Discovered Room: {current_room_name}")
-                self.visited_rooms.add(current_room_name)
+                state.memory.visited_rooms.add(current_room_name)
             self.current_room = current_room_name
             
         # 2. Check for Loot (Loot As You Go)
@@ -88,7 +89,7 @@ class SearchBuildingPlan(Plan):
             
             potential_targets = []
             for t in state.vision.tiles:
-                if hasattr(t, 'room') and t.room and t.room not in self.visited_rooms:
+                if hasattr(t, 'room') and t.room and t.room not in state.memory.visited_rooms:
                      potential_targets.append(t)
             
             if potential_targets:
@@ -98,30 +99,64 @@ class SearchBuildingPlan(Plan):
                 self.target_room = best.room
                 logger.info(f"[SearchPlan] Targeting new room: {best.room} at {best.x},{best.y}")
             else:
-                # No unvisited rooms visible. 
-                # Explore blindly? Or finish?
-                # If we explored the whole house, we are done.
-                if len(self.visited_rooms) > 0:
-                    logger.info("[SearchPlan] No new rooms visible. Finishing search.")
-                    self.complete()
-                    return []
+                # No unvisited rooms visible on this floor.
+                # Check for Stairs to change floor?
+                # We only do this if we have visited at least ONE room on this floor to avoid instant stair climbing.
+                
+                stairs_target = None
+                if state.vision.objects:
+                    player_z = state.player.position.z
+                    for obj in state.vision.objects:
+                        if "stairs" in str(obj.type).lower() or "stairs" in str(obj.id).lower():
+                             # Ensure we haven't just used this stair (ping-pong prevention?)
+                             # For now, just go to it if it looks valid
+                             
+                             # Check if it leads UP or DOWN?
+                             # Usually stairs are on current floor and lead up, or current floor (void) leading down.
+                             # If we are on Z=0, we look for stairs.
+                             
+                             # Distance check
+                             stairs_target = obj
+                             break
+                
+                if stairs_target:
+                    logger.info(f"[SearchPlan] Floor cleared. Targeting Stairs: {stairs_target.type} at {stairs_target.x},{stairs_target.y}")
+                    self.nav_target = (stairs_target.x, stairs_target.y)
+                    self.target_room = "Stairs" # Mock room name
                 else:
-                    # We haven't found ANY rooms yet (maybe outside?)
-                    logger.info("[SearchPlan] Outside/No rooms found. Wandering.")
-                    # Random walk?
-                    import random
-                    dx = random.randint(-5, 5)
-                    dy = random.randint(-5, 5)
-                    self.nav_target = (px + dx, py + dy)
+                    if len(state.memory.visited_rooms) > 0:
+                        logger.info("[SearchPlan] No new rooms or stairs visible. Finishing search.")
+                        self.complete()
+                        return []
+                    else:
+                        # We haven't found ANY rooms yet (maybe outside?)
+                        logger.info("[SearchPlan] Outside/No rooms found. Wandering.")
+                        # Random walk?
+                        import random
+                        dx = random.randint(-5, 5)
+                        dy = random.randint(-5, 5)
+                        self.nav_target = (px + dx, py + dy)
 
         # 4. Navigate
         if self.nav_target:
             tx, ty = self.nav_target
+            
+            # OBSTACLE CHECK (Weaving)
+            obs_action = NavigatorHelper.check_for_obstacles(state, (tx, ty))
+            if obs_action:
+                 return [obs_action]
+
             dist = math.dist((px, py), (tx, ty))
             if dist < 1.1: # Increased threshold slightly
                 self.nav_target = None # Arrived
                 self.has_requested_move = False # Reset for next leg
                 logger.info(f"[SearchPlan] Arrived at target {tx},{ty}")
+                
+                # Mark target room as visited to prevent loops if we are close but not "on" the tile
+                if self.target_room:
+                    logger.info(f"[SearchPlan] Marked target room {self.target_room} as visited.")
+                    state.memory.visited_rooms.add(self.target_room)
+                    
                 # We are now in the room (hopefully). 
                 # Next tick will register it as visited.
             else:
@@ -139,6 +174,17 @@ class SearchBuildingPlan(Plan):
                         "stance": state.situation.recommended_stance
                     }))
                     self.has_requested_move = True
-                    return actions # Return immediately to avoid logic conflicts
-                
+                else:
+                    # We are waiting for move to complete?
+                    if self.has_requested_move and not is_idle:
+                        pass
+                        # logger.debug(f"[SearchPlan] Waiting for move... Status: {state.player.action_state.status}")
+                    elif self.has_requested_move and is_idle:
+                        # We requested move, but are now idle. Did we stop?
+                        # This state usually flips has_requested_move back to False if we arrived, 
+                        # but we are in the 'else' block of dist < 1.1, so we are NOT arrived.
+                        # Has the action failed?
+                        logger.warning(f"[SearchPlan] Idle but not arrived (Dist:{dist:.1f}). Re-requesting move.")
+                        self.has_requested_move = False
+        
         return actions

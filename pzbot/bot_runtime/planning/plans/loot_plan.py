@@ -4,6 +4,10 @@ from typing import List
 from bot_runtime.brain.state import BrainState
 from bot_runtime.control.action_queue import Action, ActionType
 from bot_runtime.planning.base import Plan, PlanStatus
+from bot_runtime.planning.utils.navigator_helper import NavigatorHelper
+
+import logging
+logger = logging.getLogger(__name__)
 
 class LootPlan(Plan):
     """
@@ -27,8 +31,7 @@ class LootPlan(Plan):
         self.has_requested_loot = False
         self.wait_timer = 0
         
-import logging
-logger = logging.getLogger(__name__)
+
 
 # ... (Previous imports kept in context, but I only replace method guts if possible. 
 # actually Since I have whole file in view, I can replace the class method or bulk.
@@ -88,6 +91,12 @@ logger = logging.getLogger(__name__)
         
         if dist > INTERACT_RANGE:
             # Phase: Navigate
+            
+            # 1. OBSTACLE CHECK (Weaving)
+            obs_action = NavigatorHelper.check_for_obstacles(state, (target_pos.x, target_pos.y))
+            if obs_action:
+                return [obs_action] # Pause movement to open door/window
+
             if not self.has_requested_move or state.player.action_state.status == "idle":
                  logger.info(f"[LootPlan] Dist: {dist:.2f} > {INTERACT_RANGE}. Requesting Move.")
                  # Find adjacent walkable tile if target is not walkable (assumed true for containers)
@@ -185,6 +194,12 @@ logger = logging.getLogger(__name__)
             found_type = inv_item.get('type')
             if str(found_id) == str(self.target_id) or str(found_type) == str(self.target_id): 
                 logger.info(f"[LootPlan] Success! Item found in inventory.")
+                
+                # Memory: Mark Container Visited
+                if self.container_id:
+                    state.memory.visited_containers.add(str(self.container_id))
+                    logger.info(f"[Memory] Marked container {self.container_id} as visited.")
+                    
                 self.complete()
                 return []
                 
@@ -192,6 +207,11 @@ logger = logging.getLogger(__name__)
         self.wait_timer -= 1
         if self.wait_timer <= 0:
             logger.warning("[LootPlan] Timed out waiting for item transfer.")
+            
+            # Memory: Blacklist Item
+            state.memory.failed_loot_items.add(str(self.target_id))
+            logger.warning(f"[Memory] Blacklisting item {self.target_id} due to loot failure.")
+            
             self.fail("Loot timeout - Item did not appear in inventory")
             
         return []
