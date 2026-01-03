@@ -77,6 +77,8 @@ class Brain:
         self.state.navigation = nav
         self.state.zone = zone
         self.state.situation = situation
+        self.state.vision = self.memory.vision
+        self.state.player = self.memory.player
         
         # Update Thought Stream
         if new_thoughts:

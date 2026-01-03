@@ -6,6 +6,8 @@ local function getSquare(x, y, z)
     return getCell():getGridSquare(x, y, z)
 end
 
+local Navigator = require "Navigation/Navigator"
+
 function Handler_MoveTo.execute(player, params)
     if not params or not params.x or not params.y then
         print("[AISurvivorBridge] MoveTo missing coordinates")
@@ -13,37 +15,26 @@ function Handler_MoveTo.execute(player, params)
     end
     
     local z = params.z or 0
-    local sq = getSquare(params.x, params.y, z)
-    if not sq then
-        print("[AISurvivorBridge] MoveTo target square not loaded/invalid: " .. params.x .. "," .. params.y)
-        return false
+    local targetStance = "Auto"
+    if params.stance then targetStance = params.stance
+    elseif params.sprinting then targetStance = "Sprint"
+    elseif params.running then targetStance = "Run" 
     end
 
-    local mode = "Walk"
-    if params.sprinting then mode = "Sprint"
-    elseif params.running then mode = "Run" end
-
-    print("[AISurvivorBridge] [BotCommand] Queuing MoveTo ("..mode..") to " .. params.x .. "," .. params.y)
+    print("[AISurvivorBridge] [BotCommand] Navigator MoveTo ("..targetStance..") to " .. params.x .. "," .. params.y)
     
-    -- Set movement mode
-    if params.running then 
-        player:setRunning(true) 
-    else 
-        player:setRunning(false) 
-    end
-    
-    if params.sprinting then 
-        player:setSprinting(true) 
-    else 
-        player:setSprinting(false) 
+    -- Check distance?
+    local dist = math.sqrt(math.pow(params.x - player:getX(), 2) + math.pow(params.y - player:getY(), 2))
+    if dist < 0.5 then
+        print("[AISurvivorBridge] Already close to target. Skipping.")
+        return true
     end
 
-    -- Use ISWalkToTimedAction. 
-    -- Note: Vanilla ISWalkToTimedAction might override run state. 
-    -- If it does, we might need a custom action in future iterations.
-    local action = ISWalkToTimedAction:new(player, sq)
-    ISTimedActionQueue.add(action)
+    -- Call Navigator
+    Navigator.moveTo(player, params.x, params.y, z, targetStance)
     
+    -- Navigator.moveTo starts the movement immediately.
+    -- ActionClient now tracks Navigator.isMoving directly, so we don't need a blocking TimedAction.
     return true
 end
 

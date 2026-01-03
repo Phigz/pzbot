@@ -24,6 +24,8 @@ def main():
     world_model = WorldModel()
     action_queue = ActionQueue()
     input_writer = InputWriter(output_path=config.INPUT_FILE_PATH)
+    # Clear any stale inputs
+    input_writer.write_actions([], clear_queue=True, packet_id="init_clear")
     controller = BotController(world_model, action_queue, input_writer)
 
     # Initialize Watcher
@@ -97,6 +99,11 @@ def main():
                 # Brain State
                 import dataclasses
                 brain_data = dataclasses.asdict(controller.brain.state)
+                # Exclude 'vision' as it contains non-serializable Pydantic objects and is too large
+                if 'vision' in brain_data:
+                    del brain_data['vision']
+                if 'player' in brain_data:
+                    del brain_data['player']
                 
                 grid_data = {
                     "entities": known_entities,

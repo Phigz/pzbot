@@ -15,7 +15,7 @@ class IdleStrategy(Strategy):
     def evaluate(self, state: BrainState) -> float:
         return 1.0
 
-    def execute(self, state: BrainState, queue: ActionQueue):
+    def execute(self, state: BrainState, queue: ActionQueue, planner=None):
         # Only queue waiting if the queue is empty to avoid spamming
         if not queue.has_actions():
             # Wait for 1 second (1000ms)

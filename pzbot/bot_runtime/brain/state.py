@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
 import time
+from bot_runtime.ingest.state import Vision, Player
 
 @dataclass
 class CharacterPersonality:
@@ -89,6 +90,7 @@ class SituationState:
     """Meta-analysis of the current context."""
     current_mode: SituationMode = SituationMode.IDLE
     primary_driver: str = "None"     # Reason for mode (e.g. "Bleeding")
+    recommended_stance: str = "Auto" # Run, Sneak, Aim, Sprint, Auto
 
 @dataclass
 class ZoneState:
@@ -110,6 +112,8 @@ class BrainState:
     navigation: NavigationState = field(default_factory=NavigationState)
     situation: SituationState = field(default_factory=SituationState)
     zone: ZoneState = field(default_factory=ZoneState)
+    vision: Optional[Vision] = None # Raw sensory input (Context)
+    player: Optional[Player] = None # Physical self (Body, Inventory, Flags)
     
     thoughts: List[Thought] = field(default_factory=list)
     active_thought: Optional[Thought] = None # The thought generated THIS tick, if any.

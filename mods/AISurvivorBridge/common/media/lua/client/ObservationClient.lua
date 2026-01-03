@@ -323,6 +323,18 @@ function ObservationClient.OnPlayerUpdateObserve(player)
         
         -- Mark timestamp for debugging
         p.inventory_timestamp = now
+
+        -- === WORN ITEMS ===
+        p.worn_items = {}
+        local worn = player:getWornItems()
+        if worn then
+            for i=0, worn:size()-1 do
+                local item = worn:getItemByIndex(i)
+                if item then
+                    table.insert(p.worn_items, item:getDisplayName())
+                end
+            end
+        end
         
         -- === ACTION STATE ===
         local ActionClient = _G.AISurvivorBridge_ActionClient

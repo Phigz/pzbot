@@ -12,10 +12,10 @@ end
 
 local util = safeRequire("util")
 local ActionExecutor = safeRequire("ActionExecutor")
-local Logger = safeRequire("Logger")
+local Navigator = safeRequire("Navigation/Navigator")
 
 local function log_info(msg) if Logger then Logger.info("ActionClient", msg) else print("[ActionClient] "..tostring(msg)) end end
-local function log_debug(msg) if Logger then Logger.debug("ActionClient", msg) end end
+local function log_debug(msg) if Logger then Logger.debug("ActionClient", msg) else print("[ActionClient-DEBUG] "..tostring(msg)) end end
 local function log_error(msg) if Logger then Logger.error("ActionClient", msg) else print("[ActionClient] ERROR: "..tostring(msg)) end end
 
 log_info("Loading...")
@@ -41,6 +41,14 @@ end
 
 function ActionClient.OnPlayerUpdate(player)
     if not player or player ~= getPlayer() then return end
+
+    -- NAVIGATOR UPDATE TICK
+    if Navigator then 
+        -- print("[ActionClient] Ticking Navigator...")
+        Navigator.update(player) 
+    else
+        print("[ActionClient] Navigator is NIL!")
+    end
 
     local now = getTimeMs()
     if now - lastCheckTime > 500 then
@@ -91,6 +99,11 @@ function ActionClient.updateExecution(player)
         end
     end
 
+    -- Check Navigator
+    if Navigator and Navigator.isMoving then
+        isbusy = true
+    end
+
     -- Check if current action finished
     if not isbusy and currentAction then
         log_info("Action Finished: " .. (currentAction.type or "unknown"))
@@ -139,6 +152,11 @@ function ActionClient.getStatus(player)
         else
              isbusy = (#queue.queue > 0)
         end
+    end
+
+    -- Check Navigator
+    if Navigator and Navigator.isMoving then
+        isbusy = true
     end
 
     local status = "idle"

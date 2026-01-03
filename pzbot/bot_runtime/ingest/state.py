@@ -108,8 +108,9 @@ class Player(LogExtraFieldsBase):
     # New Fields for UI
     moodles: List[Dict[str, Any]] = Field(default_factory=list)
     inventory: List[Dict[str, Any]] = Field(default_factory=list)
+    worn_items: List[str] = Field(default_factory=list)
 
-    @field_validator('moodles', 'inventory', mode='before')
+    @field_validator('moodles', 'inventory', 'worn_items', mode='before')
     @classmethod
     def validate_lists(cls, v):
         if isinstance(v, dict) and not v: return []
@@ -163,6 +164,7 @@ class ContainerItem(LogExtraFieldsBase):
         extra = 'allow'
 
 class Container(LogExtraFieldsBase):
+    id: str = "Unknown"
     type: str = "Container"
     object_type: str = "Unknown"
     x: int

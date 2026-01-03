@@ -294,16 +294,8 @@ local function getActorInfo(actor, player)
                  for i=0, worn:size()-1 do
                      local item = worn:getItemByIndex(i)
                      if item then
-                         -- Check if it's a container or bag-like
-                         -- checking item:IsInventoryContainer() (Java method often exposed as IsInventoryContainer) or category
-                         local isBag = false
-                         if item.IsInventoryContainer and item:IsInventoryContainer() then isBag = true end
-                         if not isBag and string.find(item:getName(), "Bag") then isBag = true end
-                         if not isBag and string.find(item:getName(), "Pack") then isBag = true end
-                         
-                         if isBag then
-                             table.insert(meta.worn, item:getDisplayName())
-                         end
+                         -- Report all worn items so Brain knows if we are naked
+                         table.insert(meta.worn, item:getDisplayName())
                      end
                  end
              end

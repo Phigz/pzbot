@@ -214,12 +214,22 @@ The bot writes commands to `input.json`.
 | `Equip` | `itemId`, `slot` | Equip item in hand. | ⚠️ Prototype |
 | `Attack` | `targetId` | Swing weapon at target. | ❌ Planned |
 
-### 4.4. Missing Actuation Primitives
-To fully map the game's mechanics, we need to implement these atomic actions:
-- **`Interact`**: For doors, windows, light switches, generators.
-- **`Consume`**: Eat/Drink items.
-- **`Craft`**: Execute recipes.
-- **`Vehicle`**: Enter/Exit/Drive.
+### 4.5. Movement Architecture
+Movement modifiers (Stance, Speed, Aim) are determined hierarchically:
+
+1.  **Strategy Layer (Python)**:
+    - Analyzes context (Threats, Fatigue).
+    - Decides intent (e.g., "Flee fast", "Sneak past", "Aim and approach").
+    - Outputs `stance` parameter: `"Run"`, `"Sprint"`, `"Sneak"`, `"Aim"`, or `"Walk"`.
+
+2.  **Dispatch Layer (Lua ActionExecutor)**:
+    - Receives `MoveTo` command with `stance`.
+    - Routes the command to `Navigator.moveTo`.
+
+3.  **Execution Layer (Navigator.lua)**:
+    - **Pathfinding**: Generates path to target.
+    - **Action**: Queues `ISWalkToTimedAction` (Project Zomboid's native movement action).
+    - **Modifier Enforcement**: The `update` loop constantly reapplies the modifiers (e.g., `setSprinting(true)`) because standard actions often reset them. This ensures the bot maintains the requested stance throughout the movement.
 
 ---
 ### 4.3. State Schema (`state.json`)

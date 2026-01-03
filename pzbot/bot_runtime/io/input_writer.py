@@ -71,7 +71,17 @@ class InputWriter:
             with open(temp_path, 'w', encoding='utf-8') as f:
                 json.dump(packet_data, f, indent=4)
             
-            temp_path.replace(self.output_path)
+            # Retry logic for rename (Windows file locking)
+            max_retries = 5
+            for attempt in range(max_retries):
+                try:
+                    temp_path.replace(self.output_path)
+                    break # Success
+                except OSError:
+                    if attempt == max_retries - 1:
+                        raise # Give up
+                    time.sleep(0.01) # Wait 10ms
+            
             logger.info(f"Wrote {len(actions)} actions to {self.output_path}")
 
         except Exception as e:

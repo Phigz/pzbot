@@ -91,7 +91,9 @@ class BotController:
             # Recent Thought
             last_thought = b.active_thought.message if b.active_thought else "..."
             
-            logger.info(f"[CORTEX] Threat: {t_lvl:.1f}% ({t_vec} vec) | Needs: [{needs_str}] | Thought: \"{last_thought}\"")
+            plan_info = f"{b.active_plan_name}({b.plan_status})"
+            
+            logger.info(f"[CORTEX] Threat: {t_lvl:.1f}% ({t_vec} vec) | Plan: {plan_info} | Needs: [{needs_str}] | Thought: \"{last_thought}\"")
             
             # Log Vitals specifically as requested
             if game_state.player and game_state.player.body:

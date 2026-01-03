@@ -22,100 +22,177 @@ class LootPlan(Plan):
         
         # FSM State
         self.has_requested_move = False
+        self.has_requested_face = False
         self.has_requested_open = False
         self.has_requested_loot = False
         self.wait_timer = 0
         
+import logging
+logger = logging.getLogger(__name__)
+
+# ... (Previous imports kept in context, but I only replace method guts if possible. 
+# actually Since I have whole file in view, I can replace the class method or bulk.
+# I'll replace the execute method block roughly.
+
     def execute(self, state: BrainState) -> List[Action]:
         actions = []
         
         # 1. Locate Target
-        # In future, we look up target in Memory. For now, we assume it's in Vision.
-        # Check Vision for Item or Container
-        target_obj = None
+        phys_id = self.container_id if self.container_id else self.target_id
         target_pos = None
         
-        # If we have a container ID, that's our physical target
-        phys_id = self.container_id if self.container_id else self.target_id
-        
-        # Find object in vision
-        # Note: Vision.objects is list of WorldObject. Interactibles are in there too?
-        # Or checking nearby_containers / world_items
-        
-        # Search containers
-        found = False
-        for c in state.environment.nearby_containers:
-            # Container objects don't always have IDs in current schema? 
-            # Assuming we can match by some ID or we navigate to coordinates.
-            # TODO: Improve Container Schema to include UUID.
-            # For now, let's assume valid ID match or we fail.
-             pass 
-
-        # Scan for World Items (floor)
-        for item in state.vision.world_items:
-             if item.id == self.target_id:
-                 target_pos = item
-                 found = True
-                 break
-                 
-        # If not found yet, check generic objects (maybe it's a corpse?)
-        if not found and not target_pos:
-             for obj in state.vision.objects:
-                 if obj.id == phys_id:
-                     target_pos = obj
-                     found = True
+        # Search containers from environment
+        if not target_pos and state.vision and state.vision.nearby_containers:
+             for c in state.vision.nearby_containers:
+                 # Check if this container IS the target
+                 if str(c.id) == str(phys_id) or str(c.id) == str(self.target_id):
+                     target_pos = c
                      break
-        
-        if not found:
-            # If we can't see it, we can't loot it.
-            # Ideally we check Memory here.
+                 # Check if this container CONTAINS the target item
+                 if c.items:
+                     for i in c.items:
+                         if str(i.id) == str(self.target_id):
+                             target_pos = c # We go to the container
+                             break
+                 if target_pos: break
+                 
+        # Search World Items (floor)
+        if not target_pos and state.vision.world_items:
+             for item in state.vision.world_items:
+                 if str(item.id) == str(self.target_id):
+                     target_pos = item
+                     break
+
+        # Search Generic Objects (e.g. Fridge, Wardrobe)
+        if not target_pos and state.vision.objects:
+             for obj in state.vision.objects:
+                 if str(obj.id) == str(phys_id):
+                     target_pos = obj
+                     break
+
+        if not target_pos:
             self.fail(f"Target {phys_id} not in vision/memory")
             return []
             
         # 2. Check Distance
         player_pos = state.player.position
+        # Ensure target has x/y
+        if not hasattr(target_pos, 'x'):
+             # Fallback
+             self.fail("Target found but has no position")
+             return []
+             
         dist = math.dist((player_pos.x, player_pos.y), (target_pos.x, target_pos.y))
         
-        INTERACT_RANGE = 1.5
+        INTERACT_RANGE = 1.3 # Slightly generous for "Reach"
         
         if dist > INTERACT_RANGE:
             # Phase: Navigate
             if not self.has_requested_move or state.player.action_state.status == "idle":
+                 logger.info(f"[LootPlan] Dist: {dist:.2f} > {INTERACT_RANGE}. Requesting Move.")
+                 # Find adjacent walkable tile if target is not walkable (assumed true for containers)
+                 dest_x, dest_y = target_pos.x, target_pos.y
+                 
+                 # Helper to find adjacent
+                 best_dist = 9999
+                 found_adj = False
+                 
+                 # Create a quick lookup for walkability
+                 # This is O(N) where N is visible tiles (~800). Acceptable.
+                 walkable_map = set()
+                 if state.vision.tiles:
+                     for t in state.vision.tiles:
+                         if t.w: # w = walkable
+                             walkable_map.add((t.x, t.y))
+                         
+                 # Check 8 neighbors
+                 candidates = [
+                     (0, 1), (0, -1), (1, 0), (-1, 0),
+                     (1, 1), (1, -1), (-1, 1), (-1, -1)
+                 ]
+                 
+                 for dx, dy in candidates:
+                     nx, ny = target_pos.x + dx, target_pos.y + dy
+                     if (nx, ny) in walkable_map:
+                         d = math.dist((player_pos.x, player_pos.y), (nx, ny))
+                         if d < best_dist:
+                             best_dist = d
+                             dest_x, dest_y = nx, ny
+                             found_adj = True
+                             
+                 if not found_adj:
+                     # Fallback: Just try the target itself (maybe it IS walkable)
+                     pass
+                     
                  # Emit Move
+                 # Use NEW Navigator format with stance
+                 stance = "Auto"
+                 if dist > 10:
+                     stance = "Run"
+
                  actions.append(Action(ActionType.MOVE_TO.value, {
-                     "x": target_pos.x,
-                     "y": target_pos.y,
-                     "z": getattr(target_pos, 'z', 0)
+                     "x": dest_x,
+                     "y": dest_y,
+                     "z": getattr(target_pos, 'z', 0),
+                     "stance": stance
                  }))
                  self.has_requested_move = True
+                 logger.info(f"[LootPlan] Move Action Created: {dest_x},{dest_y}")
             return actions
             
-        # 3. Arrived -> Open Container (if applicable)
-        # TODO: Check if container is open. Current state schema might not expose 'open' status nicely yet.
-        # Assuming open for now, or world items don't need opening.
-        
+        if not self.has_requested_face:
+            logger.info(f"[LootPlan] Dist: {dist:.2f} <= {INTERACT_RANGE}. Arrived. Requesting Face.")
+            # Face the target (Container or Item)
+            actions.append(Action(ActionType.LOOK_TO.value, {
+                "x": target_pos.x, 
+                "y": target_pos.y
+            }))
+            self.has_requested_face = True
+            return actions
+
         # 4. Looting
         if not self.has_requested_loot:
+            # Using TRANSFER action (or Loot alias)
+            # Need to know Source Container ID.
+            # If target_pos came from nearby_containers, it has ID.
+            # If floor, ID is "floor".
+            
+            src_container = self.container_id
+            if not src_container:
+                 # Infer
+                 if hasattr(target_pos, 'object_type') and target_pos.object_type != 'InventoryItem':
+                     src_container = target_pos.id # The object itself is the container
+                 else:
+                     src_container = "floor" 
+            
+            logger.info(f"[LootPlan] Spawning Loot Action. Src: {src_container}, Item: {self.target_id}")
+
             actions.append(Action(ActionType.LOOT.value, {
-                "targetId": phys_id if self.container_id else "floor", # or specific ID
-                "itemId": self.target_id
+                "targetId": src_container, 
+                "itemId": self.target_id,
+                "destContainerId": "inventory" # Explicitly to player inventory
             }))
+            
             self.has_requested_loot = True
-            self.wait_timer = 20 # Wait 20 ticks (approx 2s) for result
+            self.wait_timer = 40 # 4s wait
             return actions
             
-        # 5. Verification
-        # Check if item is in inventory
+        # 4. Verification
         for inv_item in state.player.inventory:
-            if inv_item.id == self.target_id or inv_item.type == self.target_id: # ID or Type match
+            # Check ID match (String comparison safety)
+            # Inventory items are Dicts, not Objects
+            found_id = inv_item.get('id')
+            found_type = inv_item.get('type')
+            if str(found_id) == str(self.target_id) or str(found_type) == str(self.target_id): 
+                logger.info(f"[LootPlan] Success! Item found in inventory.")
                 self.complete()
                 return []
                 
         # Timeout check
         self.wait_timer -= 1
         if self.wait_timer <= 0:
+            logger.warning("[LootPlan] Timed out waiting for item transfer.")
             self.fail("Loot timeout - Item did not appear in inventory")
             
-        # If waiting, return empty
         return []
 

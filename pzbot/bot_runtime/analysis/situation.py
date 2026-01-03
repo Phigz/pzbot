@@ -76,4 +76,39 @@ class SituationAnalyzer:
         # 4. DEFAULT
         state.current_mode = SituationMode.IDLE
         state.primary_driver = "Waiting"
+        
+        # 5. STANCE DETERMINATION
+        # Calculate recommended stance based on Mode and Environment
+        
+        # Default
+        state.recommended_stance = "Auto"
+        
+        if state.current_mode == SituationMode.SURVIVAL:
+            # Panic/Fleeing -> Sprint
+            state.recommended_stance = "Sprint"
+            
+        elif env.is_sheltered:
+            # INDOORS
+            # User Preference: "Aim-walk through homes"
+            # If we are in "Opportunity" (Looting) or Maintenance, be careful.
+            if threat.global_level > 10.0:
+                # If ANY threat nearby, Aim to be ready
+                state.recommended_stance = "Aim"
+            else:
+                # Safe indoors? Just walk/run? 
+                # Actually, clearing implies we don't know if it's safe.
+                # Let's default to "Aim" if we are exploring (Opportunity).
+                if state.current_mode == SituationMode.OPPORTUNITY:
+                    state.recommended_stance = "Aim"
+                else:
+                    state.recommended_stance = "Walk" # Maintenance/Idle indoors = relax
+                    
+        else:
+            # OUTDOORS
+            # User Preference: "Navigating between houses... usually run"
+            if state.current_mode == SituationMode.OPPORTUNITY:
+                state.recommended_stance = "Run"
+            elif state.current_mode == SituationMode.MAINTENANCE:
+                state.recommended_stance = "Run" # Get to bed/food fast
+        
         return state

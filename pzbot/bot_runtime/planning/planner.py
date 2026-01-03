@@ -15,6 +15,10 @@ class ActionPlanner:
     def __init__(self):
         self.active_plan: Optional[Plan] = None
         
+    def is_idle(self) -> bool:
+        return self.active_plan is None
+
+        
     def set_goal(self, plan: Plan, force: bool = False):
         """
         Assigns a new plan.

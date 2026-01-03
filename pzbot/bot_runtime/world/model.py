@@ -58,7 +58,9 @@ class WorldModel(WorldView):
 
     @property
     def vision(self) -> Optional[Vision]:
-        return self.current_state.vision if self.current_state else None
+        if self.current_state and self.current_state.player:
+            return self.current_state.player.vision
+        return None
 
     # --- Grid Delegation ---
     def get_tile(self, x: int, y: int, z: int = 0):
