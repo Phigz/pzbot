@@ -1,0 +1,7 @@
+watchdog
+numpy
+watchdog
+numpy
+requests
+PyYAML
+pydantic

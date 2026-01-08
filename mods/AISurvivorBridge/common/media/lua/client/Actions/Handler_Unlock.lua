@@ -35,11 +35,10 @@ function Handler_Unlock.execute(player, params)
     if instanceof(obj, "IsoDoor") then
         print(TAG .. "Unlocking Door")
         if ISUnlockDoor then
+            -- Queue walk to the door first
             ISTimedActionQueue.add(ISWalkToTimedAction:new(player, obj:getSquare()))
-            ISTimedActionQueue.add(ISUnlockDoor:new(player, obj, true)) -- true = unlock? Check sig.
-            -- Actually ISUnlockDoor usually just takes (character, door).
-            -- ISLockDoor takes (character, door, lock).
-            -- Let's assume ISUnlockDoor:new(player, door).
+            -- Then queue the unlock action
+            -- ISUnlockDoor:new(character, door)
             ISTimedActionQueue.add(ISUnlockDoor:new(player, obj))
             return true
         else

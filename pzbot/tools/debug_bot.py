@@ -175,7 +175,11 @@ if __name__ == '__main__':
     print(f"Serving UI from {WEB_DIR}")
     
     with socketserver.TCPServer(("", PORT), RequestHandler) as httpd:
-        webbrowser.open(f"http://localhost:{PORT}")
+        if os.environ.get("HEADLESS") != "true":
+            try:
+                webbrowser.open(f"http://localhost:{PORT}")
+            except:
+                pass
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:

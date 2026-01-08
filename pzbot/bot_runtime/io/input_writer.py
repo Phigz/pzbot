@@ -66,6 +66,11 @@ class InputWriter:
         }
 
         try:
+            # Ensure parent exists
+            if not self.output_path.parent.exists():
+                logger.info(f"Creating missing directory: {self.output_path.parent}")
+                self.output_path.parent.mkdir(parents=True, exist_ok=True)
+
             # Atomic write pattern: write to temp file then rename
             temp_path = self.output_path.with_suffix('.tmp')
             with open(temp_path, 'w', encoding='utf-8') as f:

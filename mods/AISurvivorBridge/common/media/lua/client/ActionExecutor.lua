@@ -54,6 +54,7 @@ handlers["consume"] = require("Actions/Handler_Consume")
 handlers["transfer"] = require("Actions/Handler_Transfer")
 handlers["loot"] = require("Actions/Handler_Transfer") -- Alias for Transfer
 handlers["Loot"] = handlers["loot"] -- Alias for capitalized input
+handlers["DirectMove"] = require("Actions/Handler_DirectMove")
 
 
 -- Returns true if accepted, false if rejected/error.

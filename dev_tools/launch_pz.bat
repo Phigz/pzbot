@@ -29,7 +29,8 @@ if exist "%PZ_PATH%" (
 
     echo Launching Project Zomboid in DEBUG mode...
     cd /d "D:\SteamLibrary\steamapps\common\ProjectZomboid"
-    start /WAIT "" "ProjectZomboid64.exe" -debug
+    REM pass all arguments (%*) to the executable
+    start /WAIT "" "ProjectZomboid64.exe" -debug %*
     echo Game exited.
 ) else (
     echo ERROR: Project Zomboid executable not found at:

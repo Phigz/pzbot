@@ -1,0 +1,34 @@
+# Squad Manifest: "The Bravo Team"
+# Used by fleet_manager.py to spawn a party of bots
+name: "Bravo Team"
+deployment_strategy: "local_process" # or 'docker_compose'
+
+# Shared settings for the squad
+global_config:
+  memory_ttl: 60000
+  log_level: "INFO"
+
+members:
+  - id: "bravo_lead"
+    name: "Rick"
+    role: "Leader"
+    personality:
+      bravery: 0.9
+      greed: 0.2
+    spawn_location: "Muldraugh_PoliceStation"
+    
+  - id: "bravo_scout"
+    name: "Glenn"
+    role: "Scout"
+    personality:
+      bravery: 0.4
+      greed: 0.8
+    spawn_location: "Muldraugh_PoliceStation"
+
+  - id: "bravo_mule"
+    name: "Daryl"
+    role: "Hauler"
+    personality:
+      bravery: 0.7
+      greed: 0.5
+    spawn_location: "Muldraugh_PoliceStation"

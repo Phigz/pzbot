@@ -74,8 +74,22 @@ function Navigator.moveTo(player, x, y, z, stance)
          -- Aiming implies walking usually
     end
 
-    action.setOnComplete = function()
-        print(TAG .. "ISWalkToTimedAction Completed.")
+    -- Hook into standard Lifecycle methods
+    local originalPerform = action.perform
+    action.perform = function(self)
+        if originalPerform then originalPerform(self) end
+        print(TAG .. "MoveTo Action Performed (Success)")
+        Navigator.isMoving = false
+        player:setRunning(false)
+        player:setSneaking(false)
+        player:setIsAiming(false)
+        if player.setSprinting then player:setSprinting(false) end
+    end
+    
+    local originalStop = action.stop
+    action.stop = function(self)
+        if originalStop then originalStop(self) end
+        print(TAG .. "MoveTo Action Stopped (Interrupted/Cleared)")
         Navigator.isMoving = false
         player:setRunning(false)
         player:setSneaking(false)
@@ -107,8 +121,29 @@ end
 
 function Navigator.update(player)
     -- Monitor the Action Queue (Simplified)
-    
+    local queue = ISTimedActionQueue.getTimedActionQueue(player)
+    local queueEmpty = true
+    if queue and queue.queue then
+         if queue.queue.isEmpty then
+             queueEmpty = queue.queue:isEmpty()
+         else
+             -- Fallback for Lua tables or lists without isEmpty
+             queueEmpty = (#queue.queue == 0)
+         end
+    end
+
     if Navigator.isMoving then
+        -- Failsafe: If queue is empty but we think we are moving, we are wrong.
+        if queueEmpty then
+            print(TAG .. "Failsafe Triggered: Moving but Queue Empty. Resetting.")
+            Navigator.isMoving = false
+            player:setRunning(false)
+            player:setSneaking(false)
+            player:setIsAiming(false)
+            if player.setSprinting then player:setSprinting(false) end
+            return
+        end
+
         -- Enforce Stance Persistence (ISWalkToTimedAction resets these often)
         if Navigator.currentStance == "Run" then
              player:setRunning(true)

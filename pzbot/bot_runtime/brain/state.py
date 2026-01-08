@@ -75,7 +75,8 @@ class NavigationState:
     mapped_ratio: float = 0.0        # % of local chunk known
     local_constriction: float = 0.0  # 0=Open, 1=Tight
     nearest_exit: Optional[tuple] = None # Vector to outside
-
+    nav_target: Optional[tuple] = None # Current target (x,y)
+    
 from enum import Enum, auto
 
 class SituationMode(str, Enum):

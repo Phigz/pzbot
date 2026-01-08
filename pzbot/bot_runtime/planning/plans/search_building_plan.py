@@ -27,25 +27,14 @@ class SearchBuildingPlan(Plan):
         
         self.target_room = None
         self.nav_target = None
-        
+        self.failed_targets = set() # (x,y) tuples that we failed to reach
+
     def execute(self, state: BrainState) -> List[Action]:
         actions = []
         
         # 1. Update Room Knowledge
-        # In future, Sensor should return specific room ID/Name at current pos
-        # For now, we rely on `vision.tiles` or a `current_room` field if available
-        # Current fallback: assume we are in "Unknown" unless Sensor tells us.
-        
-        # HACK: Infer room from nearby tiles
         current_room_name = "Unknown"
         px, py = int(state.player.position.x), int(state.player.position.y)
-        
-        # Check current tile room
-        # We need to rely on what Sensor sees. 
-        # Ideally, Sensor.lua sends `state.player.room`?
-        # Let's check `state.player` schema? 
-        # Assuming we can derive it or it's not there yet. 
-        # Plan B: Look at `vision.tiles` under feet.
         
         for t in state.vision.tiles:
             if int(t.x) == px and int(t.y) == py:
@@ -59,36 +48,50 @@ class SearchBuildingPlan(Plan):
                 state.memory.visited_rooms.add(current_room_name)
             self.current_room = current_room_name
             
-        # 2. Check for Loot (Loot As You Go)
-        if self.mode == "LOOT_AS_YOU_GO":
-            # Delegate to LootStrategy logic? 
-            # Or just check if we see something we WANT (Needs based).
-            # For simplicity: If we see a Dresser/Wardrobe and we need clothes, 
-            # we suspend this plan and push a LootPlan?
-            # Actually, `execute` returns actions. We can't easily "push" a sub-plan here 
-            # unless the Planner supports stack.
-            # Workaround: Return NO actions, but set a flag that Strategy picks up next tick? 
-            # Better: This Plan finishes if it finds something good?
-            pass
+        # 2. Check for Loot (Loot As You Go) - Placeholder
+        pass
 
-        # 3. Pick Next Target
+        # 3. Navigation & Arrival Check
+        if self.nav_target:
+            tx, ty = self.nav_target
+            dist = math.dist((px, py), (tx, ty))
+            
+            # Stuck Detection
+            if not hasattr(self, 'last_dist'): self.last_dist = dist
+            if not hasattr(self, 'stuck_ticks'): self.stuck_ticks = 0
+            
+            if dist >= self.last_dist - 0.05: # Not moving closer
+                self.stuck_ticks += 1
+            else:
+                self.stuck_ticks = 0
+                self.last_dist = dist
+                
+            is_stuck = self.stuck_ticks > 15 # ~7.5 seconds stuck (increased to avoid false positives)
+            
+            # Arrival or Stuck
+            if dist < 1.5 or is_stuck: 
+                if is_stuck:
+                    logger.warning(f"[SearchPlan] Stuck reaching {tx},{ty} (Dist: {dist:.1f}). Blacklisting target.")
+                    self.failed_targets.add((tx, ty))
+                else:
+                    logger.info(f"[SearchPlan] Arrived at target {tx},{ty}")
+                
+                self.nav_target = None
+                self.has_requested_move = False
+                self.stuck_ticks = 0
+                self.last_dist = 999
+                
+                if self.target_room and not is_stuck:
+                    state.memory.visited_rooms.add(self.target_room)
+
+        # 4. Pick Next Target
         if not self.nav_target:
-            # logic to find next room
-            # We need a list of "Unvisited Connected Rooms".
-            # Sensor doesn't give us a topo map.
-            # Heuristic: Walk to nearest "Door" that leads to unvisited area?
-            # Or just random walk to unvisited tiles?
-            
-            # Simple approach: Find a Door in Vision we haven't passed through?
-            # Too complex for MVP.
-            
-            # MVP Approach:
-            # 1. List all rooms visible in `vision.tiles`
-            # 2. Pick one that is NOT in `visited_rooms`.
-            # 3. Move to it.
-            
             potential_targets = []
             for t in state.vision.tiles:
+                # Filter invisible walls and failed targets
+                if hasattr(t, 'v') and not t.v: continue
+                if (t.x, t.y) in self.failed_targets: continue
+
                 if hasattr(t, 'room') and t.room and t.room not in state.memory.visited_rooms:
                      potential_targets.append(t)
             
@@ -97,94 +100,76 @@ class SearchBuildingPlan(Plan):
                 best = min(potential_targets, key=lambda t: math.dist((t.x, t.y), (px, py)))
                 self.nav_target = (best.x, best.y)
                 self.target_room = best.room
+                self.last_dist = math.dist((best.x, best.y), (px, py))
                 logger.info(f"[SearchPlan] Targeting new room: {best.room} at {best.x},{best.y}")
             else:
-                # No unvisited rooms visible on this floor.
-                # Check for Stairs to change floor?
-                # We only do this if we have visited at least ONE room on this floor to avoid instant stair climbing.
-                
+                # Check Stairs
                 stairs_target = None
                 if state.vision.objects:
-                    player_z = state.player.position.z
                     for obj in state.vision.objects:
                         if "stairs" in str(obj.type).lower() or "stairs" in str(obj.id).lower():
-                             # Ensure we haven't just used this stair (ping-pong prevention?)
-                             # For now, just go to it if it looks valid
-                             
-                             # Check if it leads UP or DOWN?
-                             # Usually stairs are on current floor and lead up, or current floor (void) leading down.
-                             # If we are on Z=0, we look for stairs.
-                             
-                             # Distance check
                              stairs_target = obj
                              break
                 
-                if stairs_target:
-                    logger.info(f"[SearchPlan] Floor cleared. Targeting Stairs: {stairs_target.type} at {stairs_target.x},{stairs_target.y}")
+                if stairs_target and (stairs_target.x, stairs_target.y) not in self.failed_targets:
+                    logger.info(f"[SearchPlan] Floor cleared. Targeting Stairs: {stairs_target.type}")
                     self.nav_target = (stairs_target.x, stairs_target.y)
-                    self.target_room = "Stairs" # Mock room name
+                    self.target_room = "Stairs" 
                 else:
+                    # Check for exit? Or just finish?
                     if len(state.memory.visited_rooms) > 0:
-                        logger.info("[SearchPlan] No new rooms or stairs visible. Finishing search.")
+                        logger.info("[SearchPlan] No new rooms or stairs. Finishing search.")
                         self.complete()
                         return []
                     else:
-                        # We haven't found ANY rooms yet (maybe outside?)
                         logger.info("[SearchPlan] Outside/No rooms found. Wandering.")
-                        # Random walk?
                         import random
                         dx = random.randint(-5, 5)
                         dy = random.randint(-5, 5)
                         self.nav_target = (px + dx, py + dy)
 
-        # 4. Navigate
+        # 5. Execute Navigation
+        state.navigation.nav_target = self.nav_target
         if self.nav_target:
             tx, ty = self.nav_target
             
-            # OBSTACLE CHECK (Weaving)
             obs_action = NavigatorHelper.check_for_obstacles(state, (tx, ty))
-            if obs_action:
-                 return [obs_action]
+            if obs_action: return [obs_action]
 
-            dist = math.dist((px, py), (tx, ty))
-            if dist < 1.1: # Increased threshold slightly
-                self.nav_target = None # Arrived
-                self.has_requested_move = False # Reset for next leg
-                logger.info(f"[SearchPlan] Arrived at target {tx},{ty}")
-                
-                # Mark target room as visited to prevent loops if we are close but not "on" the tile
-                if self.target_room:
-                    logger.info(f"[SearchPlan] Marked target room {self.target_room} as visited.")
-                    state.memory.visited_rooms.add(self.target_room)
-                    
-                # We are now in the room (hopefully). 
-                # Next tick will register it as visited.
+            # DETERMINATE STANCE
+            # If target room is already visited (backtracking) -> Run
+            # If target room is Unknown/New -> Walk (or Aim if high caution)
+            # If Urgency is high (Survival) -> Run/Sprint
+            
+            stance = "Auto"
+            is_backtracking = self.target_room in state.memory.visited_rooms
+            
+            # Urgency Overrides
+            # We don't have direct access to 'Needs' logic here easily without importing heavy logic,
+            # but we can check state.situation
+            mode = state.situation.current_mode if hasattr(state.situation, 'current_mode') else "IDLE"
+            # Handle Enum wrapper if present
+            if hasattr(mode, 'name'): mode = mode.name
+
+            if mode == "SURVIVAL":
+                stance = "Run" # Sprint might be too chaotic indoors
+            elif is_backtracking:
+                stance = "Run" # Quickly move through cleared areas
             else:
-                # Emit Move ONLY if not moving or idle
-                # We need to track if we already sent it.
-                if not hasattr(self, 'has_requested_move'): self.has_requested_move = False
-                
-                is_idle = state.player.action_state.status == "idle"
-                
-                if not self.has_requested_move or is_idle:
-                    logger.info(f"[SearchPlan] Requesting Move to {tx},{ty} (Dist: {dist:.1f})")
-                    # Emit Move
+                stance = "Walk" # Measured pace for exploration
+                # Future: "Aim" if gun equipped and high caution?
+            
+            if not hasattr(self, 'has_requested_move'): self.has_requested_move = False
+            is_idle = state.player.action_state.status == "idle"
+            
+            if not self.has_requested_move or is_idle:
+                dist = math.dist((px, py), (tx, ty))
+                if dist > 0.5:
+                    # logger.info(f"[SearchPlan] Move -> {tx},{ty} [{stance}]") 
                     actions.append(Action(ActionType.MOVE_TO.value, {
                         "x": tx, "y": ty, "z": 0,
-                        "stance": state.situation.recommended_stance
+                        "stance": stance
                     }))
                     self.has_requested_move = True
-                else:
-                    # We are waiting for move to complete?
-                    if self.has_requested_move and not is_idle:
-                        pass
-                        # logger.debug(f"[SearchPlan] Waiting for move... Status: {state.player.action_state.status}")
-                    elif self.has_requested_move and is_idle:
-                        # We requested move, but are now idle. Did we stop?
-                        # This state usually flips has_requested_move back to False if we arrived, 
-                        # but we are in the 'else' block of dist < 1.1, so we are NOT arrived.
-                        # Has the action failed?
-                        logger.warning(f"[SearchPlan] Idle but not arrived (Dist:{dist:.1f}). Re-requesting move.")
-                        self.has_requested_move = False
         
         return actions

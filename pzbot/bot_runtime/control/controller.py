@@ -8,9 +8,7 @@ from bot_runtime.world.model import WorldModel
 from bot_runtime.control.action_queue import ActionQueue
 from bot_runtime.io.input_writer import InputWriter
 from bot_runtime.world.logger import WorldLogger
-
-logger = logging.getLogger(__name__)
-
+from bot_runtime.input.service import InputService
 from bot_runtime.brain.brain import Brain
 
 logger = logging.getLogger(__name__)
@@ -19,6 +17,7 @@ from bot_runtime.strategy.decision_engine import DecisionEngine
 from bot_runtime.strategy.implementations.idle import IdleStrategy
 from bot_runtime.strategy.implementations.survival import SurvivalStrategy
 from bot_runtime.strategy.implementations.loot import LootStrategy
+from bot_runtime.strategy.implementations.loot_building import LootBuildingStrategy
 from bot_runtime.planning.planner import ActionPlanner
 
 class BotController:
@@ -28,6 +27,9 @@ class BotController:
         self.input_writer = input_writer
         
         self.world_logger = WorldLogger(self.world_model)
+        
+        # Initialize Input Service (Hybrid Architecture)
+        self.input_service = InputService.get_provider()
         
         # Initialize The Brain
         self.brain = Brain(self.world_model)
@@ -43,6 +45,7 @@ class BotController:
         self.decision_engine.register_strategy(IdleStrategy())
         self.decision_engine.register_strategy(SurvivalStrategy())
         self.decision_engine.register_strategy(LootStrategy())
+        self.decision_engine.register_strategy(LootBuildingStrategy())
 
     def on_tick(self, game_state: GameState):
         """Called whenever a new game state is received."""
@@ -128,7 +131,38 @@ class BotController:
         # Write to File ONLY if Autopilot is enabled
         if actions and autopilot:
              # logger.info(f"Autopilot Executing {len(actions)} actions.")
-             self.input_writer.write_actions(actions)
+             
+             physical_actions = []
+             logical_actions = []
+             
+             for action in actions:
+                 # Hybrid Dispatch
+                 # Simple heuristic: If it's a known physical move, use InputService.
+                 # Else, use Lua Injection.
+                 
+                 # Note: "Walk" currently maps to Lua Pathfinding (WalkTo). 
+                 # If we want direct control, we'd use "Move" or "WalkDirect".
+                 # For now, let's map Combat/Simple actions.
+                 
+                 if action.type == 'Attack':
+                     self.input_service.click()
+                     # Don't buffer physical actions for file write
+                 elif action.type == 'Shove':
+                     self.input_service.press('space')
+                 elif action.type == 'ToggleSneak':
+                     self.input_service.press('c')
+                 elif action.type == 'DirectMove':
+                     # New action type for raw input: { "direction": "w", "duration": 0.5 }
+                     d = action.params.get('direction', 'w')
+                     t = action.params.get('duration', 0.1)
+                     self.input_service.hold(d, t)
+                 else:
+                     logical_actions.append(action)
+             
+             # Execute Logical Actions via Lua
+             if logical_actions:
+                self.input_writer.write_actions(logical_actions)
+                
         elif actions:
              # logger.debug("Shadow Mode: Actions proposed but inhibited.")
              pass

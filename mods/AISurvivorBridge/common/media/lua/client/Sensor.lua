@@ -399,14 +399,19 @@ local function classifySprite(sName)
     return nil
 end
 
-local function scanSquare(vision, x, y, z, px, py, playerIndex)
+local function scanSquare(vision, x, y, z, px, py, playerIndex, player)
     local sq = getSquare(x, y, z)
     local distSq = (x-px)*(x-px) + (y-py)*(y-py)
     local isClose = distSq < (8*8)
     
     if sq and (sq:isSeen(playerIndex) or isClose) then
         local isWalkable = sq:isFree(false)
-        local tileData = { x = x, y = y, z = z, w = isWalkable }
+        local isVisible = true 
+        -- CanSee caused crashes. Reverting to always visible for now.
+        -- We will rely on NavigatorHelper to check for walls via other means if possible,
+        -- or re-investigate CanSee signature later.
+
+        local tileData = { x = x, y = y, z = z, w = isWalkable, v = isVisible }
              
         -- INTERACTIBLES SCAN
         local inters = getInteractibleData(sq)
@@ -690,7 +695,7 @@ function Sensor.scan(player, gridRadius)
 
     for x = startX, endX do
         for y = startY, endY do
-            scanSquare(vision, x, y, pz, px, py, playerIndex)
+            scanSquare(vision, x, y, pz, px, py, playerIndex, player)
         end
     end
     
@@ -777,9 +782,9 @@ function Sensor.scan(player, gridRadius)
                 local curr = startObj
                 local safety = 0
                 local debugChain = ""
-                if startObj then 
-                     debugChain = tostring(startObj:getClass():getSimpleName()) 
-                end
+                -- if startObj then 
+                --      debugChain = tostring(startObj:getClass():getSimpleName()) 
+                -- end
 
                 while curr and safety < 10 do
                     safety = safety + 1

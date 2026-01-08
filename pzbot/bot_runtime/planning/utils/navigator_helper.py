@@ -96,7 +96,13 @@ class NavigatorHelper:
             # For now, let's assume `is_open` boolean is available or we check regex on sprite name if available.
             
             is_closed = True
-            if hasattr(obj, 'is_open') and obj.is_open:
+            
+            # Check Meta for Open status (populated by Sensor.lua)
+            if obj.meta and obj.meta.get('open'):
+                is_closed = False
+                
+            # Legacy/Fallback checks
+            elif hasattr(obj, 'is_open') and obj.is_open:
                 is_closed = False
             elif hasattr(obj, 'flags') and 'open' in (obj.flags or []): 
                 is_closed = False

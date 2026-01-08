@@ -252,14 +252,27 @@ function updateBrainState(brain) {
     document.getElementById('situationContainer').innerHTML = `
         <div style="color:${sitColor}; font-size: 1.4em;">${modeStr}</div>
         <div style="font-size:0.8em; color:#888; margin-top:5px;">Driver: ${sit.primary_driver}</div>
-        <div style="font-size:1.0em; color:#fff; margin-top:10px;">
-            Strategy: <strong>${brain.active_strategy_name || "Init"}</strong> ${proposal}
-        </div>
-        <div style="font-size:0.9em; color:#aaa; margin-top:5px; border-top:1px solid #444; padding-top:4px;">
-            Plan: <span style="color:#f96">${brain.active_plan_name || "None"}</span> 
-            <span style="font-size:0.8em">(${brain.plan_status || "IDLE"})</span>
-        </div>
     `;
+
+    // Update Strategy & Planning Section
+    document.getElementById('strategyVal').innerText = brain.active_strategy_name || "Init";
+    document.getElementById('planVal').innerText = brain.active_plan_name || "None";
+
+    // Status color
+    const pStatus = brain.plan_status || "IDLE";
+    document.getElementById('planStatusVal').innerText = pStatus;
+    if (pStatus === 'RUNNING') document.getElementById('planStatusVal').style.color = '#4CAF50';
+    if (pStatus === 'FAILED') document.getElementById('planStatusVal').style.color = '#f44336';
+    if (pStatus === 'COMPLETE') document.getElementById('planStatusVal').style.color = '#2196F3';
+
+    // Render Queue (Proposed Actions)
+    if (brain.proposed_actions && brain.proposed_actions.length > 0) {
+        document.getElementById('actionQueueList').innerHTML = brain.proposed_actions.map(a =>
+            `<div style="color:#aaf;"> > ${a.type} <span style="font-size:0.8em; color:#888;">${JSON.stringify(a.params)}</span></div>`
+        ).join('');
+    } else {
+        document.getElementById('actionQueueList').innerHTML = '<span style="font-style:italic;">Empty</span>';
+    }
 
     // 2. Environment
     const env = brain.environment || {};
@@ -801,6 +814,16 @@ function renderMap(grid, state) {
         const pos = toScreen(t.x, t.y);
         offCtx.fillStyle = getStringColor(t);
         offCtx.fillRect(pos.x, pos.y, TILE_SIZE, TILE_SIZE);
+
+        // Visibility Overlay for Debugging
+        // Explicit false check to ensure we only darken definitively invisible tiles (if data available)
+        if (t.v === false) {
+            offCtx.fillStyle = "rgba(0, 0, 0, 0.6)";
+            offCtx.fillRect(pos.x, pos.y, TILE_SIZE, TILE_SIZE);
+            // X marker?
+            // offCtx.strokeStyle = "#444";
+            // offCtx.beginPath(); offCtx.moveTo(pos.x, pos.y); offCtx.lineTo(pos.x+TILE_SIZE, pos.y+TILE_SIZE); offCtx.stroke();
+        }
     });
 
     // Helper for Offscreen
@@ -848,6 +871,29 @@ function renderMap(grid, state) {
 
         // Player
         if (playerPos) draw(playerPos.x, playerPos.y, COLORS.Player, 'circle', true);
+
+        // Planning Visualization (Target Line)
+        if (state.brain && state.brain.navigation && state.brain.navigation.nav_target) {
+            const tgt = state.brain.navigation.nav_target;
+            const pt = toScreen(tgt[0], tgt[1]);
+            const pp = toScreen(playerPos.x, playerPos.y);
+
+            // Draw Line
+            offCtx.strokeStyle = "#00FFFF"; // Cyan
+            offCtx.lineWidth = 2;
+            offCtx.setLineDash([5, 5]);
+            offCtx.beginPath();
+            offCtx.moveTo(pp.x + TILE_SIZE / 2, pp.y + TILE_SIZE / 2);
+            offCtx.lineTo(pt.x + TILE_SIZE / 2, pt.y + TILE_SIZE / 2);
+            offCtx.stroke();
+            offCtx.setLineDash([]);
+            offCtx.lineWidth = 1;
+
+            // Draw Target Marker
+            offCtx.fillStyle = "#00FFFF";
+            const sz = 6;
+            offCtx.fillRect(pt.x + TILE_SIZE / 2 - sz / 2, pt.y + TILE_SIZE / 2 - sz / 2, sz, sz);
+        }
 
         // Live Signals
         asArray(v.signals).forEach(s => {

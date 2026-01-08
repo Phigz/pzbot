@@ -28,6 +28,8 @@ local lastSequenceNumber = -1
 local completedActionIDs = {} -- Set of executed action IDs
 local currentAction = nil
 local currentBatchActions = {} -- Maintain the current list of actions
+local lastCompletedActionId = nil
+local lastCompletedResult = "success"
 
 function ActionClient.OnGameStart()
     log_info("Ready.")
@@ -109,6 +111,8 @@ function ActionClient.updateExecution(player)
         log_info("Action Finished: " .. (currentAction.type or "unknown"))
         if currentAction.id then
             completedActionIDs[currentAction.id] = true
+            lastCompletedActionId = currentAction.id
+            lastCompletedResult = "success"
         end
         currentAction = nil
     end
@@ -130,7 +134,9 @@ function ActionClient.updateExecution(player)
                         return -- Start one at a time for now
                     else
                         log_error("Failed to start action " .. i)
-                        completedActionIDs[id] = true -- Mark failed actions as done to prevent infinite loop
+                        completedActionIDs[id] = true 
+                        lastCompletedActionId = id
+                        lastCompletedResult = "failed_start"
                     end
                 else
                 end
@@ -164,12 +170,20 @@ function ActionClient.getStatus(player)
         status = "executing"
     end
 
+    local completed_ids_list = {}
+    for id, _ in pairs(completedActionIDs) do
+        table.insert(completed_ids_list, id)
+    end
+
     return {
         status = status, -- executing / idle
         sequence_number = lastSequenceNumber,
         current_action_id = currentAction and currentAction.id,
         current_action_type = currentAction and currentAction.type,
-        queue_busy = isbusy
+        queue_busy = isbusy,
+        last_completed_action_id = lastCompletedActionId,
+        last_completed_result = lastCompletedResult,
+        completed_ids = completed_ids_list
     }
 end
 

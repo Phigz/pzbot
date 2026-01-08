@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  pz-bot:
+    build: .
+    image: pz-bot:latest
+    container_name: pz-bot-1
+    stdin_open: true # tty
+    tty: true # tty
+    volumes:
+      # The "Game Cartridge" - Persistent Game Data (Named Volume)
+      - pz-game-install:/root/Zomboid
+      # The "Source Code" - Hot Reloading
+      - ./:/app
+      # The "Brain Stem" - Local Mod Development & All Installed Mods
+      - ../mods:/root/Zomboid/mods
+      # SteamCMD Cache (Named Volume)
+      - pz-steam-cache:/root/steamcmd
+    working_dir: /app
+    ports:
+      - "16261:16261/udp" # Game port
+      - "16262:16262/udp" # Direct connect port
+      - "5900:5900" # VNC (Video Feed)
+      - "8000:8000" # Debug Bot UI
+    restart: "no"
+
+volumes:
+  pz-game-install:
+  pz-steam-cache:

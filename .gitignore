@@ -16,6 +16,8 @@
 # Ignore certain pzbot files
 /pzbot/logs/*
 /pzbot/data/*
+/pzbot/scenarios/*
+/pzbot/zomboid-cache/*
 
 # Mods: Ignore everything except AISurvivorBridge
 /mods/*

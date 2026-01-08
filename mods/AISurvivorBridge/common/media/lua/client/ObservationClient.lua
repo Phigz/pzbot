@@ -353,6 +353,9 @@ function ObservationClient.OnPlayerUpdateObserve(player)
             p.action_state.queue_busy = actionStatus.queue_busy
             p.action_state.current_action_id = actionStatus.current_action_id
             p.action_state.current_action_type = actionStatus.current_action_type
+            p.action_state.last_completed_action_id = actionStatus.last_completed_action_id
+            p.action_state.last_completed_result = actionStatus.last_completed_result
+            p.action_state.completed_ids = actionStatus.completed_ids
         end
 
         -- === ENVIRONMENT ===

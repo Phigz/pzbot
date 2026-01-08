@@ -95,7 +95,21 @@ class LootPlan(Plan):
             # 1. OBSTACLE CHECK (Weaving)
             obs_action = NavigatorHelper.check_for_obstacles(state, (target_pos.x, target_pos.y))
             if obs_action:
-                return [obs_action] # Pause movement to open door/window
+                # Security Check: Do not open windows for loot
+                obs_id = obs_action.params.get('targetId')
+                is_window = False
+                if state.vision.objects:
+                    for o in state.vision.objects:
+                        if str(o.id) == str(obs_id) and "Window" in o.type:
+                            is_window = True
+                            break
+                            
+                if is_window:
+                    logger.warning(f"[LootPlan] Path blocked by Window {obs_id}. Aborting to preserve security.")
+                    self.fail("Path blocked by Window")
+                    return []
+                    
+                return [obs_action] # Pause movement to open door
 
             if not self.has_requested_move or state.player.action_state.status == "idle":
                  logger.info(f"[LootPlan] Dist: {dist:.2f} > {INTERACT_RANGE}. Requesting Move.")

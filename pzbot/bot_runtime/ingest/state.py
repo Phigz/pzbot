@@ -95,6 +95,16 @@ class ActionState(LogExtraFieldsBase):
     queue_busy: bool = False
     current_action_id: Optional[str] = None
     current_action_type: str = "IDLE"
+    last_completed_action_id: Optional[str] = None
+    last_completed_result: Optional[str] = None
+    completed_ids: List[str] = Field(default_factory=list)
+
+    @field_validator('completed_ids', mode='before')
+    @classmethod
+    def validate_ids(cls, v):
+        if isinstance(v, dict) and not v: return []
+        if isinstance(v, dict): return list(v.values()) # Lua tables as list
+        return v
 
 class Player(LogExtraFieldsBase):
     guid: str = "unknown"
@@ -122,6 +132,7 @@ class Tile(LogExtraFieldsBase):
     y: int
     z: int
     w: bool # walkable
+    v: bool = False # visible (LOS)
     room: Optional[str] = None
     layer: Optional[str] = None
 

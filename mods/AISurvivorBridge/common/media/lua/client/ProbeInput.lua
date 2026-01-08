@@ -1,27 +1,35 @@
-local function probeInput()
-    print("[Probe] Starting Input API Probe...")
-    
-    local classes = {
-        "zombie.input.GameKeyboard",
-        "zombie.input.KeyboardState",
-        "zombie.core.Core",
-        "zombie.input.Input"
-    }
+local util = require("util")
 
-    for _, clsName in ipairs(classes) do
-        local cls = loadstring("return " .. clsName)()
-        if cls then
-            print("[Probe] Class found: " .. clsName)
-            -- Dump methods
-            for k,v in pairs(cls) do
-                 print("[Probe] " .. clsName .. "." .. tostring(k) .. " (" .. type(v) .. ")")
-            end
-        else
-            print("[Probe] Class NOT found/loadable: " .. clsName)
-        end
+local function probeInputMethods()
+    local player = getSpecificPlayer(0)
+    print("[ProbeInput] Checking GameKeyboard...")
+    
+    -- Check if GameKeyboard is available global
+    if GameKeyboard then
+        print("[ProbeInput] GameKeyboard found.")
+        util.inspectObject(GameKeyboard, "Key")
+    else
+        -- Try loading it?
+        -- It's usually exposed as a static class if Kahlua allows.
+        print("[ProbeInput] GameKeyboard global not found.")
     end
     
-    print("[Probe] Input Probe Complete.")
+    print("[ProbeInput] Checking Player methods for 'Forward'...")
+    -- We want to see if there's a boolean toggle for movement
+    local candidates = {"setMoveForward", "setIsAttemptingToMove", "setForceRun", "setAuthorizeMove", "setIgnoreInputs"}
+    
+    if player and player.getClass then
+        local methods = player:getClass():getMethods()
+        for i=0, methods.length-1 do
+            local m = methods[i]
+            local name = m:getName()
+            for _, c in ipairs(candidates) do
+                if string.find(string.lower(name), string.lower(c)) then
+                    print("[ProbeInput] Found Method: " .. name)
+                end
+            end
+        end
+    end
 end
 
-Events.OnGameStart.Add(probeInput)
+Events.OnGameStart.Add(probeInputMethods)

@@ -21,6 +21,9 @@ def main():
     for arg in unknown:
         if "/new" in arg or "new" in arg:
             mode = "new_game"
+        # If joining a server via IP, disable AutoLoader logic by marking as done
+        if "-ip" in arg:
+            mode = "done"
     
     config_data = {"mode": mode}
     
