@@ -117,14 +117,21 @@ class BotController:
              # Visualize Intent (Always)
              b.proposed_actions = actions
         
-        # Check Control Config
-        autopilot = False
+        # Check Control Config (Safety Gate)
+        # 1. Update Safety Lock based on Game State (Paused? Lua Toggle?)
+        autopilot = self.input_service.check_safety(game_state)
+        
+        # 2. Optional: Local Runtime Config Override (Web UI)
+        # We can implement an AND condition here if we want a separate "Kill Switch"
         try:
             ctl_path = bot_config.BASE_DIR / "config" / "runtime_control.json"
             if ctl_path.exists():
                 with open(ctl_path, 'r') as f:
                     data = json.load(f)
-                    autopilot = data.get("autopilot", False)
+                    # If local config says False, force False
+                    if not data.get("autopilot", True): 
+                        autopilot = False
+                        self.input_service.get_provider().set_safety_lock(True)
         except Exception:
             pass
 

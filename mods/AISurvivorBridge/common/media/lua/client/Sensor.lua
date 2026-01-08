@@ -603,7 +603,13 @@ function Sensor.scan(player, gridRadius)
         neighbors = {},
         nearby_containers = {},
         vehicles = {}, 
-        signals = getSignals(player) 
+        signals = getSignals(player),
+        flags = {
+            autopilot_enabled = (AISurvivorBridge_Autopilot and AISurvivorBridge_Autopilot.isEnabled()) or false
+        },
+        environment = {
+            is_paused = (getGameSpeed() == 0)
+        }
     }
 
     if not player then return vision end

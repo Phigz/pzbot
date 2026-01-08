@@ -68,4 +68,4 @@ function DirectControl.onTick()
     end
 end
 
-Events.OnPlayerUpdate.Add(DirectControl.onTick)
+-- Events.OnPlayerUpdate.Add(DirectControl.onTick)

@@ -275,6 +275,7 @@ class Environment(LogExtraFieldsBase):
     wind_speed: float = 0.0
     light_level: float = 0.0
     clouds: float = 0.0
+    is_paused: bool = False
     nearby_containers: List[Container] = Field(default_factory=list) # Global containers fallback
 
     @field_validator('nearby_containers', mode='before')
@@ -287,8 +288,10 @@ class Environment(LogExtraFieldsBase):
 class GameState(LogExtraFieldsBase):
     timestamp: float = 0.0
     tick: float = 0.0
+    tick: float = 0.0
     player: Player
     environment: Optional[Environment] = None
+    flags: Dict[str, bool] = Field(default_factory=dict)
 
     def __init__(self, **data):
         # We need to handle potential serialization quirks from Lua here BEFORE Pydantic

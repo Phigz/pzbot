@@ -1,0 +1,37 @@
+name: "Test Mixed Input"
+steps:
+  - name: "Initial Pause"
+    type: "Wait"
+    duration: 2.0
+    
+  - name: "Look East"
+    type: "LookAt"
+    params:
+      x: 100 # Relative? No absolute. We need valid coords. 
+      # Actually FaceLocation takes world coords. 
+      # If we don't know where we are, this is risky.
+      # Let's assume we are near 0,0 or use Lua to face direction?
+      # Lua FaceLocation takes x,y.
+      # Let's try to just Look at a container or just explicit coords if known.
+      # Safest: Use "Say" to confirm Lua channel working.
+      type: "Say"
+      data: { text: "Starting Input Test" }
+      
+  - name: "Say Hello (Lua Channel)"
+    type: "LuaAction"
+    params:
+        action_type: "Say"
+        data: { text: "Hello Inputs!" }
+    duration: 1.0
+
+  - name: "Walk Forward (OS Channel)"
+    type: "Walk"
+    params:
+        direction: "w"
+    duration: 1.0
+    
+  - name: "Finished"
+    type: "LuaAction"
+    params:
+        action_type: "Say"
+        data: { text: "Test Complete" }

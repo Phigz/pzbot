@@ -346,7 +346,6 @@ function ObservationClient.OnPlayerUpdateObserve(player)
              -- Fallback if Config not loaded yet
              actionStatus = ActionClient.getStatus(player)
         end
-        
         if actionStatus then
             p.action_state.status = actionStatus.status
             p.action_state.sequence_number = actionStatus.sequence_number
@@ -357,6 +356,12 @@ function ObservationClient.OnPlayerUpdateObserve(player)
             p.action_state.last_completed_result = actionStatus.last_completed_result
             p.action_state.completed_ids = actionStatus.completed_ids
         end
+
+        -- === FLAGS ===
+        -- Global flags for bot control/safety
+        state.flags = {
+            autopilot_enabled = (AISurvivorBridge_Autopilot and AISurvivorBridge_Autopilot.isEnabled()) or false
+        }
 
         -- === ENVIRONMENT ===
         local gt = getGameTime()
@@ -388,7 +393,8 @@ function ObservationClient.OnPlayerUpdateObserve(player)
             wind_speed = clim:getWindIntensity(),
             light_level = light,
             ex_temp = clim:getTemperature(), -- Global Air Temp
-            weather = weatherStr 
+            weather = weatherStr,
+            is_paused = (getGameSpeed() == 0)
         }
 
         -- Write to disk
